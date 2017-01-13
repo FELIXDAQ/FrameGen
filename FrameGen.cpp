@@ -29,28 +29,29 @@ void FrameGen::fill(ofstream& frame) {
 	_CrateNo = rand()%32;
 	_SlotNo = rand()%8;
 	_FiberNo = rand()%8;
-	_Capture = _rand(_mt)<_errProb;
-	_ASIC = _rand(_mt)<_errProb;
-	_WIB_Errors = _rand(_mt)<_errProb;
+	_Capture = _randDouble(_mt)<_errProb;
+	_ASIC = _randDouble(_mt)<_errProb;
+	_WIB_Errors = _randDouble(_mt)<_errProb;
 	_binaryData[2] = _CrateNo + (_SlotNo<<5) + (_FiberNo<<8) + (_Capture<<16) + (_ASIC<<20) + (_WIB_Errors<<24);
     
-    // Check whether _maxNoise has a valid value.
-    if(_maxNoise<0 || _maxNoise>=65536) {
-        cout << "Warning: noise amplitude out of range (0 - 2^16). Value reset." << endl;
-        _maxNoise = 8;
-    }
-    
-	// Produce four COLDATA blocks. (Random numbers have 16 bits each.)
-	for(int i=0; i<4; i++) {
-		// Build 27 32-bit words of COLDATA.
-		for(int j=0; j<27; j++)
-            _binaryData[4+i*28+j] = rand()%_maxNoise + ((rand()%_maxNoise)<<16);
-
-		// Generate checksums and insert them.
-		_Checksum_A[i] = checksum_A(i);
+    // Produce four COLDATA blocks. (Random numbers have 16 bits each.)
+    binomial_distribution<int> _randInt(_noiseAmplitude*2, 0.5);
+    int randnum = 0; // Temporary variable to check random noise generation.
+    for(int i=0; i<4; i++) {
+        // Build 27 32-bit words of COLDATA in sets of two 16-bit numbers.
+        for(int j=0; j<27; j++)
+            for(int k=0; k<2; k++) {
+                do {
+                    randnum = _randInt(_mt)-_noiseAmplitude+_noisePedestal;
+                } while(randnum<0);
+                _binaryData[4+i*28+j] += randnum<<(16*k);
+            }
+        
+        // Generate checksums and insert them.
+        _Checksum_A[i] = checksum_A(i);
 		_Checksum_B[i] = checksum_B(i);
-		_S1_Err[i] = _rand(_mt)<_errProb;
-		_S2_Err[i] = _rand(_mt)<_errProb;
+		_S1_Err[i] = _randDouble(_mt)<_errProb;
+		_S2_Err[i] = _randDouble(_mt)<_errProb;
 		_binaryData[3+i*28] = _Checksum_A[i] + (_Checksum_B[i]<<8) + (_S1_Err[i]<<16) + (_S2_Err[i]<<20);
 	}
 

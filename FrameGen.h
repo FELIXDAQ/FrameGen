@@ -46,13 +46,14 @@ private:
 	uint64_t _CRC32_Polynomial = 6186310019; // Polynomial to compute the CRC32 checksum (random 33-bit). Needs to be >=2^32.
 
 	// Metadata.
-	double _errProb = 0.00001; // Chance for any error bit to be set.
-    int _maxNoise = 8; // Amplitude of the noise (maximally 2^16).
-
-	// Random double generator to set error bits.
+    double _errProb = 0.00001; // Chance for any error bit to be set.
+    uint16_t _noisePedestal = 32; // Pedestal of the noise (0 - 2^16).
+    uint16_t _noiseAmplitude = 8; // Amplitude of the noise (maximally 2^16).
+    
+	// Random double generator to set error bits and generate noise.
 	random_device _rd;
 	mt19937 _mt;
-	uniform_real_distribution<double> _rand;
+	uniform_real_distribution<double> _randDouble;
 
 	void fill(ofstream& frame);
 
@@ -68,9 +69,9 @@ private:
 
 public:
 	// Constructors/destructors.
-	FrameGen(): _mt(_rd()), _rand(0.0, 1.0) {}
-	FrameGen(const string prefix): _mt(_rd()), _rand(0.0, 1.0), _prefix(prefix) {}
-    FrameGen(const int maxNoise): _maxNoise(maxNoise) {}
+	FrameGen(): _mt(_rd()), _randDouble(0.0, 1.0) {}
+	FrameGen(const string prefix): _mt(_rd()), _randDouble(0.0, 1.0), _prefix(prefix) {}
+    FrameGen(const int maxNoise): _noiseAmplitude(maxNoise) {}
 	~FrameGen() {}
 
 	// Frame name accessors/modifiers.
@@ -85,6 +86,12 @@ public:
 
 	const string getFrameName(unsigned long i)	{ return _path + _prefix + to_string(i) + _suffix + _extension; }
 	const string getFrameName()					{ return _path + _prefix + _suffix + _extension; }
+    
+    // Noise parameter accessors/modifiers.
+    void setPedestal(uint16_t pedestal)     { _noisePedestal = pedestal; }
+    const uint16_t getPedestal()            { return _noisePedestal; }
+    void setAmplitude(uint16_t amplitude)	{ _noiseAmplitude = amplitude; }
+    const uint16_t getAmplitude()           { return _noiseAmplitude; }
 
 	// Main generator function: builds frames and calls the fill function.
 	void generate(const unsigned long Nframes = 1);
