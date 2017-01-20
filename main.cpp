@@ -28,6 +28,9 @@ int main(int argc, char* argv[]) {
     F3.setPath("exampleframes/lotsoffiles/");
     F3.generate("hundred",100);
     F3.check(100);
+    
+    F3.compress("test.txt");
+    F3.decompress("test.txt.comp");
 
 	return 0;
 }

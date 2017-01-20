@@ -15,6 +15,8 @@
 #include <ctime>
 #include <random>
 
+#include "zlib-1.2.11/zlib.h"
+
 using namespace std;
 
 static unsigned int _frameNo = 0; // Total number of frames.
@@ -47,8 +49,8 @@ private:
 
 	// Metadata.
     double _errProb = 0.00001; // Chance for any error bit to be set.
-    uint16_t _noisePedestal = 32; // Pedestal of the noise (0 - 2^16).
-    uint16_t _noiseAmplitude = 8; // Amplitude of the noise (maximally 2^16).
+    uint16_t _noisePedestal = 250; // Pedestal of the noise (0 - 2^16).
+    uint16_t _noiseAmplitude = 10; // Amplitude of the noise (0 - 2^16).
     
 	// Random double generator to set error bits and generate noise.
 	random_device _rd;
@@ -102,13 +104,22 @@ public:
 
     // Function to check whether a frame corresponds to its checksums and whether any of its error bits are set. Overwrites _binaryData[]!
     bool check(const string framename);
-    bool check();
+    bool check() { return check(_path+_prefix+"0"+_suffix+_extension); }
 	// Overloaded check functions to handle a range of files.
 	bool check(const unsigned int begin, const unsigned int end);
 	bool check(const unsigned int end);
     // Function to check frames within a single file.
     bool checkSingleFile(const string filename);
-    bool checkSingleFile();
+    bool checkSingleFile() { return checkSingleFile(getFrameName()); }
+    
+    // Function that attempts to open a file by its name, trying variations with class parameters (_extension, _path, etc.).
+    const bool openFile(ifstream& strm, const string& filename);
+    
+    // Functions to compress and decompress frames or sets of frames by a file name.
+    const bool compress(const string filename);
+    const bool compress() { return compress(getFrameName()); }
+    const bool decompress(const string filename);
+    const bool decompress() { return decompress(getFrameName()); }
 };
 
 #endif /* FILEGEN_H_ */
