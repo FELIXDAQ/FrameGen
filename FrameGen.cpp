@@ -13,16 +13,16 @@ using namespace std;
 void FrameGen::fill(ofstream& frame) {
     // Reset _binaryData[].
     for(int i=0; i<120; i++)
-        _binaryData[i] = 0;
-    
+    _binaryData[i] = 0;
+
     // Header.
     _Stream_ID = rand()%8;
     _Reset_Count = rand()%16777216; // (2^24)
     _binaryData[0] = _Stream_ID + (_Reset_Count<<8);
-    
+
     _WIB_Timestamp = time(nullptr);
     _binaryData[1] = _WIB_Timestamp;
-    
+
     _CrateNo = rand()%32;
     _SlotNo = rand()%8;
     _FiberNo = rand()%8;
@@ -30,20 +30,20 @@ void FrameGen::fill(ofstream& frame) {
     _ASIC = _randDouble(_mt)<_errProb;
     _WIB_Errors = _randDouble(_mt)<_errProb;
     _binaryData[2] = _CrateNo + (_SlotNo<<5) + (_FiberNo<<8) + (_Capture<<16) + (_ASIC<<20) + (_WIB_Errors<<24);
-    
+
     // Produce four COLDATA blocks. (Random numbers have 16 bits each.)
     binomial_distribution<int> _randInt(_noiseAmplitude*2, 0.5);
     int randnum = 0; // Temporary variable to check random noise generation.
     for(int i=0; i<4; i++) {
         // Build 27 32-bit words of COLDATA in sets of two 16-bit numbers.
         for(int j=0; j<27; j++)
-            for(int k=0; k<2; k++) {
-                do {
-                    randnum = _randInt(_mt)-_noiseAmplitude+_noisePedestal;
-                } while(randnum<0);
-                _binaryData[4+i*28+j] += randnum<<(16*k);
-            }
-        
+        for(int k=0; k<2; k++) {
+            do {
+                randnum = _randInt(_mt)-_noiseAmplitude+_noisePedestal;
+            } while(randnum<0);
+            _binaryData[4+i*28+j] += randnum<<(16*k);
+        }
+
         // Generate checksums and insert them.
         _Checksum_A[i] = checksum_A(i);
         _Checksum_B[i] = checksum_B(i);
@@ -51,11 +51,11 @@ void FrameGen::fill(ofstream& frame) {
         _S2_Err[i] = _randDouble(_mt)<_errProb;
         _binaryData[3+i*28] = _Checksum_A[i] + (_Checksum_B[i]<<8) + (_S1_Err[i]<<16) + (_S2_Err[i]<<20);
     }
-    
+
     // Final checksum over the entire frame.
     _CRC32 = CRC32();
     _binaryData[115] = _CRC32;
-    
+
     // Print the generated data to frame.
     for(int i=0; i<120; i++) {
         frame << (unsigned char)((_binaryData[i]<<24)>>24);
@@ -106,34 +106,34 @@ uint32_t FrameGen::CRC32(uint32_t padding) {
     for(int i=0; i<114*32; i++) { // The register shifts through 115 32-bit words and is 33 bits long.
         // Perform XOR on the shifting register if the leading bit is 1 and shift.
         if(shiftReg & 8589934592) // (2^33)
-            shiftReg ^= _CRC32_Polynomial;
+        shiftReg ^= _CRC32_Polynomial;
         shiftReg = shiftReg<<1 | ((_binaryData[i/32+1]>>(31-(i%32)))&1);
     }
     // Shift through padding.
     for(int i=0; i<32; i++) {
         if(shiftReg & 8589934592)// (2^33)
-            shiftReg ^= _CRC32_Polynomial;
+        shiftReg ^= _CRC32_Polynomial;
         shiftReg = shiftReg<<1 | ((padding>>(31-i))&1);
     }
     // One last XOR after the final shift.
     if(shiftReg & 8589934592) // (2^33)
-        shiftReg ^= _CRC32_Polynomial;
-    
+    shiftReg ^= _CRC32_Polynomial;
+
     return shiftReg;
 }
 
 // Print current frame.
 void FrameGen::printFrame() {
     for(int i=0; i<120; i++)
-        cout << _binaryData[i] << endl;
+    cout << _binaryData[i] << endl;
 }
 
 // Main generator function: builds frames and calls the fill function.
 void FrameGen::generate(const unsigned long Nframes) {
     if(_path == "")
-        cout << "Generating frames." << endl;
+    cout << "Generating frames." << endl;
     else
-        cout << "Generating frames at path " << _path << "." << endl;
+    cout << "Generating frames at path " << _path << "." << endl;
     for(unsigned long i=0; i<Nframes; i++) {
         // Open frame, fill it and close it.
         ofstream frame(getFrameName(i));
@@ -144,10 +144,10 @@ void FrameGen::generate(const unsigned long Nframes) {
         }
         fill(frame);
         frame.close();
-        
+
         // Keep track of progress.
         if((i*100)%Nframes==0)
-            cout << i*100/Nframes << "%\r" << flush;
+        cout << i*100/Nframes << "%\r" << flush;
         _frameNo++;
     }
     cout << "    \tDone." << endl;
@@ -161,10 +161,10 @@ void FrameGen::generate(const string newPrefix, const unsigned long Nframes) {
 // Generator function to create a certain number of frames and place them in the same file.
 void FrameGen::generateSingleFile(const unsigned long Nframes) {
     if(_path == "")
-        cout << "Generating frames." << endl;
+    cout << "Generating frames." << endl;
     else
-        cout << "Generating frames at path " << _path << "." << endl;
-    
+    cout << "Generating frames at path " << _path << "." << endl;
+
     // Open frame, fill it and close it.
     string filename = _path+_prefix+_suffix+_extension;
     ofstream file(filename);
@@ -174,10 +174,10 @@ void FrameGen::generateSingleFile(const unsigned long Nframes) {
     }
     for(unsigned long i=0; i<Nframes; i++) {
         fill(file);
-        
+
         // Keep track of progress.
         if((i*100)%Nframes==0)
-            cout << i*100/Nframes << "%\r" << flush;
+        cout << i*100/Nframes << "%\r" << flush;
         _frameNo++;
     }
     file.close();
@@ -190,73 +190,73 @@ void FrameGen::generateSingleFile(const string newPrefix, const unsigned long Nf
 }
 
 // Function to check whether a frame corresponds to its checksums and whether any of its error bits are set. Overwrites _binaryData[]!
-bool FrameGen::check(const string framename) {
+const bool FrameGen::check(const string framename) {
     // Open frame.
     ifstream frame(framename, ios::binary);
     if(!frame) {
         cout << "Error (check()): could not open frame " << framename << "." << endl;
         return false;
     }
-    
+
     // Load data from frame (32 bits = 4 bytes at a time).
     for(int i=0; i<120; i++)
-        frame.read((char*)&(_binaryData[i]),4);
-    
+    frame.read((char*)&(_binaryData[i]),4);
+
     // Check checksums.
     for(int i=0; i<4; i++) {
         if(checksum_A(i, _binaryData[3+i*28]))
-            cout << "Frame " << framename << ", COLDATA block " << i+1 << "/4 contains an error in checksum A." << endl;
+        cout << "Frame " << framename << ", COLDATA block " << i+1 << "/4 contains an error in checksum A." << endl;
         if(checksum_B(i, _binaryData[3+i*28]>>8))
-            cout << "Frame " << framename << ", COLDATA block " << i+1 << "/4 contains an error in checksum B." << endl;
+        cout << "Frame " << framename << ", COLDATA block " << i+1 << "/4 contains an error in checksum B." << endl;
     }
     if(CRC32(_binaryData[115])) {
         cout << "Frame " << framename << " failed its cyclic redundancy check." << endl;
         frame.close();
         return false;
     }
-    
-    // Check errors.
+
+    // Check errors and produce a warning.
     if(_binaryData[2]>>16 & 1) // Capture
-        cout << "Warning: Capture error bit set in frame " << framename << "." << endl;
+    cout << "Warning: Capture error bit set in frame " << framename << "." << endl;
     if(_binaryData[2]>>20 & 1) // ASIC
-        cout << "Warning: ASIC error bit set in frame " << framename << "." << endl;
+    cout << "Warning: ASIC error bit set in frame " << framename << "." << endl;
     if(_binaryData[2]>>24 & 1) // WIB_Errors
-        cout << "Warning: WIB error bit set in frame " << framename << "." << endl;
+    cout << "Warning: WIB error bit set in frame " << framename << "." << endl;
     for(int i=0; i<4; i++) {
         if(_binaryData[3+i*28]>>16 & 1) // S1
-            cout << "Warning: S1 error bit set in frame " << framename << ", block " << i+1 << "/4." << endl;
+        cout << "Warning: S1 error bit set in frame " << framename << ", block " << i+1 << "/4." << endl;
         if(_binaryData[3+i*28]>>20 & 1) // S2
-            cout << "Warning: S2 error bit set in frame " << framename << ", block " << i+1 << "/4." << endl;
+        cout << "Warning: S2 error bit set in frame " << framename << ", block " << i+1 << "/4." << endl;
     }
-    
+
     frame.close();
     return true;
 }
 
 // Overloaded check functions to handle a range of files.
-bool FrameGen::check(const unsigned int begin, const unsigned int end) {
+const bool FrameGen::check(const unsigned int begin, const unsigned int end) {
     if(_path == "")
-        cout << "Checking frames." << endl;
+    cout << "Checking frames." << endl;
     else
-        cout << "Checking frames at path " << _path << "." << endl;
+    cout << "Checking frames at path " << _path << "." << endl;
     for(unsigned int i=begin; i<end; i++)
-        if(!check(getFrameName(i)))
-            return false;
+    if(!check(getFrameName(i)))
+    return false;
     return true;
 }
-bool FrameGen::check(const unsigned int end) {
+const bool FrameGen::check(const unsigned int end) {
     if(_path == "")
-        cout << "Checking frames." << endl;
+    cout << "Checking frames." << endl;
     else
-        cout << "Checking frames at path " << _path << "." << endl;
+    cout << "Checking frames at path " << _path << "." << endl;
     for(unsigned int i=0; i<end; i++)
-        if(!check(getFrameName(i)))
-            return false;
+    if(!check(getFrameName(i)))
+    return false;
     return true;
 }
 
 // Function to check files within a single file.
-bool FrameGen::checkSingleFile(const string filename) {
+const bool FrameGen::checkSingleFile(const string filename) {
     // Open file.
     ifstream file(filename, ios::binary);
     if(!file) {
@@ -264,10 +264,10 @@ bool FrameGen::checkSingleFile(const string filename) {
         return false;
     }
     if(_path == "")
-        cout << "Checking frames." << endl;
+    cout << "Checking frames." << endl;
     else
-        cout << "Checking frames at " << getFrameName() << "." << endl;
-    
+    cout << "Checking frames at " << getFrameName() << "." << endl;
+
     // Get number of frames and check whether this is an integer.
     file.seekg(0,file.end);
     if(file.tellg()%480) {
@@ -276,14 +276,14 @@ bool FrameGen::checkSingleFile(const string filename) {
     }
     int numberOfFrames = file.tellg()/480;
     file.seekg(0,file.beg);
-    
+
     bool result = true;
-    
+
     for(int j=0; j<numberOfFrames; j++) {
         // Load data from file (32 bits = 4 bytes at a time).
         for(int i=0; i<120; i++)
-            file.read((char*)&(_binaryData[i]),4);
-        
+        file.read((char*)&(_binaryData[i]),4);
+
         // Check checksums.
         for(int i=0; i<4; i++) {
             if(checksum_A(i, _binaryData[3+i*28])) {
@@ -300,22 +300,22 @@ bool FrameGen::checkSingleFile(const string filename) {
             file.close();
             result = false;
         }
-        
+
         // Check errors.
         if(_binaryData[2]>>16 & 1) // Capture
-            cout << "Warning: Capture error bit set in frame " << j+1 << "/" << numberOfFrames << "." << endl;
+        cout << "Warning: Capture error bit set in frame " << j+1 << "/" << numberOfFrames << "." << endl;
         if(_binaryData[2]>>20 & 1) // ASIC
-            cout << "Warning: ASIC error bit set in frame " << j+1 << "/" << numberOfFrames << "." << endl;
+        cout << "Warning: ASIC error bit set in frame " << j+1 << "/" << numberOfFrames << "." << endl;
         if(_binaryData[2]>>24 & 1) // WIB_Errors
-            cout << "Warning: WIB error bit set in frame " << j+1 << "/" << numberOfFrames << "." << endl;
+        cout << "Warning: WIB error bit set in frame " << j+1 << "/" << numberOfFrames << "." << endl;
         for(int i=0; i<4; i++) {
             if(_binaryData[3+i*28]>>16 & 1) // S1
-                cout << "Warning: S1 error bit set in frame " << j+1 << "/" << numberOfFrames << ", block " << i+1 << "/4." << endl;
+            cout << "Warning: S1 error bit set in frame " << j+1 << "/" << numberOfFrames << ", block " << i+1 << "/4." << endl;
             if(_binaryData[3+i*28]>>20 & 1) // S2
-                cout << "Warning: S2 error bit set in frame " << j+1 << "/" << numberOfFrames << ", block " << i+1 << "/4." << endl;
+            cout << "Warning: S2 error bit set in frame " << j+1 << "/" << numberOfFrames << ", block " << i+1 << "/4." << endl;
         }
     }
-    
+
     file.close();
     return result;
 }
@@ -328,37 +328,37 @@ const bool FrameGen::openFile(ifstream& strm, const string& filename){
     possibleName[2] = _path+filename+_extension;
     possibleName[3] = filename+_suffix+_extension;
     possibleName[4] = _path+filename+_suffix+_extension;
-    
+
     for(int i=0; !strm && i<5; i++)
-        strm.open(possibleName[i], ios::binary);
-    
+    strm.open(possibleName[i], ios::binary);
+
     return strm? true: false;
 }
 
 // Function to compress frames or sets of frames.
-const bool FrameGen::compress(const string filename) {
+const bool FrameGen::compressFile(const string filename) {
     // Open original file.
     ifstream ifcomp(filename, ios::binary);
     if(!openFile(ifcomp, filename)) {
         cout << "Error (compress()): file " << filename << " could not be openend." << endl;
         return false;
     }
-    
+
     // Get file length and create buffer (to be changed to shifting window).
     ifcomp.seekg(0,ifcomp.end);
     unsigned long iflength = ifcomp.tellg();
     ifcomp.seekg(0,ifcomp.beg);
-    
+
     Bytef* ifbuff = new Bytef[iflength];
     ifcomp.read((char*)ifbuff,iflength);
-    
+
     // Create file to output compressed data into.
     ofstream ofcomp(filename+".comp", ios::binary);
     if(!ofcomp) {
         cout << "Error (compress()): file " << filename+".comp" << " could not be created." << endl;
         return false;
     }
-    
+
     // Create buffer for compressed file and perform the compression (with the compression function from zlib).
     unsigned long oflength = iflength*1.1 + 12; // The new buffer needs to be longer than the original only until compression is complete.
     Bytef* ofbuff = new Bytef[oflength];
@@ -369,67 +369,67 @@ const bool FrameGen::compress(const string filename) {
         case Z_DATA_ERROR:  cout << "Error (compress()): the data was corrupted." << endl;          return false;
         default:            cout << "Error (compress()): unknown error code." << endl;              return false;
     }
-    
+
     ofcomp.write((char*)ofbuff,oflength);
-    
+
     // Cleanup.
     delete[] ifbuff;
     delete[] ofbuff;
     remove(filename.c_str());
     ifcomp.close();
     ofcomp.close();
-    
+
     return true;
 }
 
-const bool FrameGen::decompress(const string filename) {
+const bool FrameGen::decompressFile(const string filename) {
     // Check whether the filename has the right extension.
     bool compExt = true;
     if(strcmp(filename.substr(filename.rfind("."),filename.length()).c_str(), ".comp")) { // Compare filename extension to ".comp".
-        cout << "Warning: the file " << filename << " does not have the default \".comp\" extension." << endl;
-        compExt = false;
-    }
-    // Open original file.
-    ifstream ifdecomp(filename, ios::binary);
-    if(!ifdecomp) {
-        cout << "Error (decompress()): file " << filename << " could not be opened." << endl;
-        return false;
-    }
-    
-    // Get file length and create buffer (to be changed to shifting window).
-    ifdecomp.seekg(0,ifdecomp.end);
-    unsigned long iflength = ifdecomp.tellg();
-    ifdecomp.seekg(0,ifdecomp.beg);
-    
-    Bytef* ifbuff = new Bytef[iflength];
-    ifdecomp.read((char*)ifbuff,iflength);
-    
-    // Create file to output compressed data into.
-    ofstream ofdecomp(compExt? filename.substr(0,filename.length()-5): filename);
-    if(!ofdecomp) {
-        cout << "Error (decompress()): file " << (compExt? filename.substr(0,filename.length()-5): filename) << " could not be created." << endl;
-        return false;
-    }
-    
-    // Create buffer for decompressed file and perform the decompression (with the decompression function from zlib).
-    unsigned long oflength = iflength*30; // Just to be safe.
-    Bytef* ofbuff = new Bytef[oflength];
-    switch(::uncompress(ofbuff, &oflength, ifbuff, iflength)) {
-        case Z_OK:          break;
-        case Z_MEM_ERROR:   cout << "Error (decompress()): out of memory." << endl;                     return false;
-        case Z_BUF_ERROR:   cout << "Error (decompress()): output buffer not large enough." << endl;    return false;
-        case Z_DATA_ERROR:  cout << "Error (decompress()): the data was corrupted." << endl;            return false;
-        default:            cout << "Error (decompress()): unknown error code." << endl;                return false;
-    }
-    
-    ofdecomp.write((char*)ofbuff,oflength);
-    
-    // Cleanup.
-    delete[] ifbuff;
-    delete[] ofbuff;
-    remove(filename.c_str());
-    ifdecomp.close();
-    ofdecomp.close();
-    
-    return true;
+    cout << "Warning: the file " << filename << " does not have the default \".comp\" extension." << endl;
+    compExt = false;
+}
+// Open original file.
+ifstream ifdecomp(filename, ios::binary);
+if(!ifdecomp) {
+    cout << "Error (decompress()): file " << filename << " could not be opened." << endl;
+    return false;
+}
+
+// Get file length and create buffer (to be changed to shifting window).
+ifdecomp.seekg(0,ifdecomp.end);
+unsigned long iflength = ifdecomp.tellg();
+ifdecomp.seekg(0,ifdecomp.beg);
+
+Bytef* ifbuff = new Bytef[iflength];
+ifdecomp.read((char*)ifbuff,iflength);
+
+// Create file to output compressed data into.
+ofstream ofdecomp(compExt? filename.substr(0,filename.length()-5): filename);
+if(!ofdecomp) {
+    cout << "Error (decompress()): file " << (compExt? filename.substr(0,filename.length()-5): filename) << " could not be created." << endl;
+    return false;
+}
+
+// Create buffer for decompressed file and perform the decompression (with the decompression function from zlib).
+unsigned long oflength = iflength*30; // Just to be safe.
+Bytef* ofbuff = new Bytef[oflength];
+switch(::uncompress(ofbuff, &oflength, ifbuff, iflength)) {
+    case Z_OK:          break;
+    case Z_MEM_ERROR:   cout << "Error (decompress()): out of memory." << endl;                     return false;
+    case Z_BUF_ERROR:   cout << "Error (decompress()): output buffer not large enough." << endl;    return false;
+    case Z_DATA_ERROR:  cout << "Error (decompress()): the data was corrupted." << endl;            return false;
+    default:            cout << "Error (decompress()): unknown error code." << endl;                return false;
+}
+
+ofdecomp.write((char*)ofbuff,oflength);
+
+// Cleanup.
+delete[] ifbuff;
+delete[] ofbuff;
+remove(filename.c_str());
+ifdecomp.close();
+ofdecomp.close();
+
+return true;
 }
