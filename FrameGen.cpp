@@ -385,51 +385,52 @@ const bool FrameGen::compressFile(const string filename) {
 const bool FrameGen::decompressFile(const string filename) {
     // Check whether the filename has the right extension.
     bool compExt = true;
-    if(strcmp(filename.substr(filename.rfind("."),filename.length()).c_str(), ".comp")) { // Compare filename extension to ".comp".
-    cout << "Warning: the file " << filename << " does not have the default \".comp\" extension." << endl;
-    compExt = false;
-}
-// Open original file.
-ifstream ifdecomp(filename, ios::binary);
-if(!ifdecomp) {
-    cout << "Error (decompress()): file " << filename << " could not be opened." << endl;
-    return false;
-}
+    // Compare filename extension to ".comp".
+    if(strcmp(filename.substr(filename.rfind("."),filename.length()).c_str(), ".comp")) {
+        cout << "Warning: the file " << filename << " does not have the default \".comp\" extension." << endl;
+        compExt = false;
+    }
+    // Open original file.
+    ifstream ifdecomp(filename, ios::binary);
+    if(!ifdecomp) {
+        cout << "Error (decompress()): file " << filename << " could not be opened." << endl;
+        return false;
+    }
 
-// Get file length and create buffer (to be changed to shifting window).
-ifdecomp.seekg(0,ifdecomp.end);
-unsigned long iflength = ifdecomp.tellg();
-ifdecomp.seekg(0,ifdecomp.beg);
+    // Get file length and create buffer (to be changed to shifting window).
+    ifdecomp.seekg(0,ifdecomp.end);
+    unsigned long iflength = ifdecomp.tellg();
+    ifdecomp.seekg(0,ifdecomp.beg);
 
-Bytef* ifbuff = new Bytef[iflength];
-ifdecomp.read((char*)ifbuff,iflength);
+    Bytef* ifbuff = new Bytef[iflength];
+    ifdecomp.read((char*)ifbuff,iflength);
 
-// Create file to output compressed data into.
-ofstream ofdecomp(compExt? filename.substr(0,filename.length()-5): filename);
-if(!ofdecomp) {
-    cout << "Error (decompress()): file " << (compExt? filename.substr(0,filename.length()-5): filename) << " could not be created." << endl;
-    return false;
-}
+    // Create file to output compressed data into.
+    ofstream ofdecomp(compExt? filename.substr(0,filename.length()-5): filename);
+    if(!ofdecomp) {
+        cout << "Error (decompress()): file " << (compExt? filename.substr(0,filename.length()-5): filename) << " could not be created." << endl;
+        return false;
+    }
 
-// Create buffer for decompressed file and perform the decompression (with the decompression function from zlib).
-unsigned long oflength = iflength*30; // Just to be safe.
-Bytef* ofbuff = new Bytef[oflength];
-switch(::uncompress(ofbuff, &oflength, ifbuff, iflength)) {
-    case Z_OK:          break;
-    case Z_MEM_ERROR:   cout << "Error (decompress()): out of memory." << endl;                     return false;
-    case Z_BUF_ERROR:   cout << "Error (decompress()): output buffer not large enough." << endl;    return false;
-    case Z_DATA_ERROR:  cout << "Error (decompress()): the data was corrupted." << endl;            return false;
-    default:            cout << "Error (decompress()): unknown error code." << endl;                return false;
-}
+    // Create buffer for decompressed file and perform the decompression (with the decompression function from zlib).
+    unsigned long oflength = iflength*30; // Just to be safe.
+    Bytef* ofbuff = new Bytef[oflength];
+    switch(::uncompress(ofbuff, &oflength, ifbuff, iflength)) {
+        case Z_OK:          break;
+        case Z_MEM_ERROR:   cout << "Error (decompress()): out of memory." << endl;                     return false;
+        case Z_BUF_ERROR:   cout << "Error (decompress()): output buffer not large enough." << endl;    return false;
+        case Z_DATA_ERROR:  cout << "Error (decompress()): the data was corrupted." << endl;            return false;
+        default:            cout << "Error (decompress()): unknown error code." << endl;                return false;
+    }
 
-ofdecomp.write((char*)ofbuff,oflength);
+    ofdecomp.write((char*)ofbuff,oflength);
 
-// Cleanup.
-delete[] ifbuff;
-delete[] ofbuff;
-remove(filename.c_str());
-ifdecomp.close();
-ofdecomp.close();
+    // Cleanup.
+    delete[] ifbuff;
+    delete[] ofbuff;
+    remove(filename.c_str());
+    ifdecomp.close();
+    ofdecomp.close();
 
-return true;
+    return true;
 }

@@ -47,7 +47,7 @@ private:
 	uint32_t _CRC32; // Complete checksum of frame.
 	uint64_t _CRC32_Polynomial = 6186310019; // Polynomial to compute the CRC32 checksum (random 33-bit). Needs to be >=2^32.
 
-	// Metadata.
+	// Noise data.
 	double _errProb = 0.00001; // Chance for any error bit to be set.
 	uint16_t _noisePedestal = 250; // Pedestal of the noise (0 - 2^16).
 	uint16_t _noiseAmplitude = 10; // Amplitude of the noise (0 - 2^16).
@@ -117,9 +117,9 @@ public:
 
 	// Functions to compress and decompress frames or sets of frames by a file name.
 	const bool compressFile(const string filename);
-	const bool compressFile() { return compress(getFrameName()); }
+	const bool compressFile() { return compressFile(getFrameName()); }
 	const bool decompressFile(const string filename);
-	const bool decompressFile() { return decompress(getFrameName()); }
+	const bool decompressFile() { return decompressFile(getFrameName()); }
 };
 
 #endif /* FILEGEN_H_ */
