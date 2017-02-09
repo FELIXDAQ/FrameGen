@@ -6,7 +6,7 @@
 // Description : FrameGen in C++, Ansi-style
 //============================================================================
 
-#include "FrameGen.h"
+#include "FrameGen.hpp"
 
 using namespace std;
 
