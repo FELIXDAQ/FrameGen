@@ -12,10 +12,11 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cstring>
 #include <ctime>
 #include <random>
 
-#include "zlib-1.2.11/zlib.h"
+#include "zlib.h"
 
 using namespace std;
 
