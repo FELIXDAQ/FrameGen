@@ -1,7 +1,7 @@
 // This is an example program that showcases the various uses of FrameGen.
 
 #include <iostream>
-#include "FrameGen.h"
+#include "FrameGen.hpp"
 
 using namespace std;
 
