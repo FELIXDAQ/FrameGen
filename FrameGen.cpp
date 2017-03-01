@@ -260,7 +260,10 @@ namespace framegen {
     // and whether any of its error bits are set. Overwrites _binaryData[]!
     const bool check(const std::string& filename) {
         Frame frame;
-        frame.load(filename);
+        if(!frame.load(filename)) {
+            std::cout << "Error (framegen::check()): file " << filename << " could not be opened." << std::endl;
+            return false;
+        }
         
         // Check checksums.
         for(int i=0; i<4; i++) {
@@ -321,27 +324,27 @@ namespace framegen {
             // Check checksums.
             for(int i=0; i<4; i++) {
                 if(frame.checksum_A(i, frame.getChecksumA(i)))
-                    std::cout << "Frame " << filename << ", COLDATA block " << i+1 << "/4 contains an error in checksum A." << std::endl;
+                    std::cout << "Frame " << j << " of file " << filename << ", COLDATA block " << i+1 << "/4 contains an error in checksum A." << std::endl;
                 if(frame.checksum_B(i, frame.getChecksumB(i)))
-                    std::cout << "Frame " << filename << ", COLDATA block " << i+1 << "/4 contains an error in checksum B." << std::endl;
+                    std::cout << "Frame " << j << " of file " << filename << ", COLDATA block " << i+1 << "/4 contains an error in checksum B." << std::endl;
             }
             if(frame.CRC32(frame.getCRC32())) {
-                std::cout << "Frame " << filename << " failed its cyclic redundancy check." << std::endl;
+                std::cout << "Frame " << j << " of file " << filename << " failed its cyclic redundancy check." << std::endl;
                 return false;
             }
             
             // Check errors and produce a warning.
             if(frame.getCapture()) // Capture
-                std::cout << "Warning: Capture error bit set in frame " << filename << "." << std::endl;
+                std::cout << "Warning: Capture error bit set in frame " << j << " of file " << filename << "." << std::endl;
             if(frame.getASIC()) // ASIC
-                std::cout << "Warning: ASIC error bit set in frame " << filename << "." << std::endl;
+                std::cout << "Warning: ASIC error bit set in frame " << j << " of file " << filename << "." << std::endl;
             if(frame.getWIBErrors()) // WIB_Errors
-                std::cout << "Warning: WIB error bit set in frame " << filename << "." << std::endl;
+                std::cout << "Warning: WIB error bit set in frame " << j << " of file " << filename << "." << std::endl;
             for(int i=0; i<4; i++) {
                 if(frame.getS1Err(i)) // S1
-                    std::cout << "Warning: S1 error bit set in frame " << filename << ", block " << i+1 << "/4." << std::endl;
+                    std::cout << "Warning: S1 error bit set in frame " << j << " of file " << filename << ", block " << i+1 << "/4." << std::endl;
                 if(frame.getS2Err(i)) // S2
-                    std::cout << "Warning: S2 error bit set in frame " << filename << ", block " << i+1 << "/4." << std::endl;
+                    std::cout << "Warning: S2 error bit set in frame " << j << " of file " << filename << ", block " << i+1 << "/4." << std::endl;
             }
         }
         
