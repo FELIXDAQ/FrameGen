@@ -162,5 +162,5 @@ namespace framegen {
     
 } // namespace framegen
 
-#endif /* FRAMEGEN_H_ */
+#endif /* FRAMEGEN_HPP_ */
 

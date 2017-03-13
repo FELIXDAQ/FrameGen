@@ -21,3 +21,7 @@ Then build the package:
 make
 ```
 
+To install the library and include file:
+```
+make install
+```

@@ -41,3 +41,9 @@ target_link_libraries(framegen ${ZLIB_LIBRARIES})
 add_executable(framegen-test main.cpp)
 target_link_libraries(framegen-test framegen ${ZLIB_LIBRARIES})
 
+## INSTALLATION ##
+install(TARGETS framegen
+		RUNTIME DESTINATION bin
+		LIBRARY DESTINATION lib
+		ARCHIVE DESTINATION lib)
+install(FILES FrameGen.hpp DESTINATION include)

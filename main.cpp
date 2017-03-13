@@ -3,14 +3,12 @@
 #include <iostream>
 #include "FrameGen.hpp"
 
-using namespace std;
-
 int main(int argc, char* argv[]) {
     
     // Take a command line argument if available and make a frame generator with the entered noise level (0-2^16).
     framegen::FrameGen* F1;
     if(argc>1)
-        F1 = new framegen::FrameGen(stoi(argv[1]));
+        F1 = new framegen::FrameGen(atoi(argv[1]));
     else
         F1 = new framegen::FrameGen(32);
     F1->setPath("exampleframes/");
