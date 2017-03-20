@@ -37,7 +37,12 @@ int main(int argc, char* argv[]) {
     // Create a frame, fill it with the 21st frame of a file and then print it to another file.
     framegen::Frame Fr;
     Fr.load("exampleframes/thousand.frame", 20);
-    Fr.print("exampleframes/testfile.frame");
+    Fr.print("exampleframes/printed.frame");
+    // Extract and set the WIB header and a COLDATA block.
+    framegen::WIB_header head(Fr.getWIBHeader());
+    framegen::COLDATA_block block(Fr.getCOLDATABlock(2));
+    Fr.setWIBHeader(head);
+    Fr.setCOLDATABlock(1, block);
     
     return 0;
 }

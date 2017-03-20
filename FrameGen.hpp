@@ -10,11 +10,13 @@
 #define FRAMEGEN_HPP_
 
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <string>
 #include <cstring>
 #include <ctime>
 #include <random>
+#include <chrono>
 
 #include "zlib.h"
 
@@ -22,30 +24,21 @@
 
 namespace framegen {
     
-    class Frame {
-        // Frame structure from Eric Hazen's preliminary WIB->FELIX frame format:
-        // http://docs.dunescience.org/cgi-bin/RetrieveFile?docid=1701&filename=ProtoDUNE_to_FELIX.pdf&version=1
-    private:
-        uint32_t _binaryData[120]; // Container for all data of a single frame.
-        //    uint64_t _CRC32_Polynomial = 6186310019; // Polynomial to compute the CRC32 checksum (random 33-bit). Needs to be >=2^32.
-    public:
+    static uint64_t numberOfFrames = 0;
+    
+    struct WIB_header {
         // Header/footer accessors.
-        const uint8_t  getStreamID()        { return _binaryData[0]; } // Data type (trigger, calibration, unbiased, etc.) to route data.
-        const uint32_t getResetCount()      { return _binaryData[0]>>8; } // Increments by one every 2^16 frames.
-        const uint32_t getWIBTimestamp()    { return _binaryData[1]; } // Local timestamp.
-        const uint8_t  getCrateNo()         { return _binaryData[2]&0x1F; } // Crate number.
-        const uint8_t  getSlotNo()          { return (_binaryData[2]>>5)&0x7; } // Slot number.
-        const uint8_t  getFiberNo()         { return (_binaryData[2]>>8)&0x7; } // Fiber number.
-        const uint8_t  getCapture()         { return (_binaryData[2]>>16)&0xF; } // Error bit set if an error occurred during data capture.
-        const uint8_t  getASIC()            { return (_binaryData[2]>>20)&0xF; } // Error bit set if an error was logged in ASIC data.
-        const uint8_t  getWIBErrors()       { return _binaryData[2]>>16; } // Error bit set by the WIB.
-        const uint32_t getCRC32()           { return _binaryData[115]; } // Complete checksum of frame.
-        // COLDATA blocks accessors.
-        const uint8_t  getChecksumA(int blockNum)           { return _binaryData[3+28*blockNum]; } // Checksum of individual COLDATA blocks.
-        const uint8_t  getChecksumB(int blockNum)           { return _binaryData[3+28*blockNum]>>8; } // Checksum of individual COLDATA blocks.
-        const uint8_t  getS1Err(int blockNum)               { return (_binaryData[3+28*blockNum]>>16)&0xF; } // Indicate errors in capturing streams from COLDATA ASICS.
-        const uint8_t  getS2Err(int blockNum)               { return (_binaryData[3+28*blockNum]>>20)&0xF; } // Indicate errors in capturing streams from COLDATA ASICS.
-        const uint16_t getCOLDATA(int blockNum, int num)    { return _binaryData[4+28*blockNum+num/2]>>(16*(1-num%2)); } // Raw data.
+        uint32_t _binaryData[4];
+        const uint8_t  getStreamID()        { return _binaryData[0]; }              // Data type (trigger, calibration, unbiased, etc.) to route data.
+        const uint32_t getResetCount()      { return _binaryData[0]>>8; }           // Increments by one every 2^16 frames.
+        const uint32_t getWIBTimestamp()    { return _binaryData[1]; }              // Local timestamp.
+        const uint8_t  getCrateNo()         { return _binaryData[2]&0x1F; }         // Crate number.
+        const uint8_t  getSlotNo()          { return (_binaryData[2]>>5)&0x7; }     // Slot number.
+        const uint8_t  getFiberNo()         { return (_binaryData[2]>>8)&0x7; }     // Fiber number.
+        const uint8_t  getCapture()         { return (_binaryData[2]>>16)&0xF; }    // Error bit set if an error occurred during data capture.
+        const uint8_t  getASIC()            { return (_binaryData[2]>>20)&0xF; }    // Error bit set if an error was logged in ASIC data.
+        const uint8_t  getWIBErrors()       { return _binaryData[2]>>16; }          // Error bit set by the WIB.
+        const uint32_t getCRC32()           { return _binaryData[3]; }              // Complete checksum of frame.
         
         // Header/footer mutators.
         void setStreamID(uint8_t newStreamID)           { _binaryData[0] = (_binaryData[0]&~(0xFF)) | newStreamID; }
@@ -57,13 +50,85 @@ namespace framegen {
         void setCapture(uint8_t newCapture)             { _binaryData[2] = (_binaryData[2]&~(0xF<<16)) | (newCapture&0xF)<<16; }
         void setASIC(uint8_t newASIC)                   { _binaryData[2] = (_binaryData[2]&~(0xF<<20)) | (newASIC&0xF)<<20; }
         void setWIBErrors(uint8_t newWIBErrors)         { _binaryData[2] = (_binaryData[2]&~(0xFF<<24)) | newWIBErrors<<24; }
-        void setCRC32(uint32_t newCRC32)                { _binaryData[115] = newCRC32; }
+        void setCRC32(uint32_t newCRC32)                { _binaryData[3] = newCRC32; }
+    };
+    
+    struct COLDATA_block {
+        uint32_t _binaryData[28];
+        // COLDATA blocks accessors.
+        const uint8_t  getChecksumA()       { return _binaryData[0]; }                          // Checksum of individual COLDATA blocks.
+        const uint8_t  getChecksumB()       { return _binaryData[0]>>8; }                       // Checksum of individual COLDATA blocks.
+        const uint8_t  getS1Err()           { return (_binaryData[0]>>16)&0xF; }                // Indicate errors in capturing streams from COLDATA ASICS.
+        const uint8_t  getS2Err()           { return (_binaryData[0]>>20)&0xF; }                // Indicate errors in capturing streams from COLDATA ASICS.
+        const uint16_t getCOLDATA(int num)  { return _binaryData[1+num/2]>>(16*(1-num%2)); }    // Raw data.
+        
         // COLDATA blocks mutators.
-        void setChecksumA(int blockNum, uint8_t newChecksumA)       { _binaryData[3+28*blockNum] = (_binaryData[3+28*blockNum]&~(0xFF)) | newChecksumA; }
-        void setChecksumB(int blockNum, uint8_t newChecksumB)       { _binaryData[3+28*blockNum] = (_binaryData[3+28*blockNum]&~(0xFF<<8)) | newChecksumB<<8; }
-        void setS1Err(int blockNum, uint8_t newS1Err)               { _binaryData[3+28*blockNum] = (_binaryData[3+28*blockNum]&~(0xF<<16)) | (newS1Err&0xF)<<16; }
-        void setS2Err(int blockNum, uint8_t newS2Err)               { _binaryData[3+28*blockNum] = (_binaryData[3+28*blockNum]&~(0xF<<20)) | (newS2Err&0xF)<<20; }
-        void setCOLDATA(int blockNum, int num, uint16_t newCOLDATA) { _binaryData[4+28*blockNum+num/2] = (_binaryData[4+28*blockNum+num/2]&~(0xFFFF<<(16*num%2))) | newCOLDATA<<(16*num%2); }
+        void setChecksumA(uint8_t newChecksumA)       { _binaryData[0] = (_binaryData[0]&~(0xFF)) | newChecksumA; }
+        void setChecksumB(uint8_t newChecksumB)       { _binaryData[0] = (_binaryData[0]&~(0xFF<<8)) | newChecksumB<<8; }
+        void setS1Err(uint8_t newS1Err)               { _binaryData[0] = (_binaryData[0]&~(0xF<<16)) | (newS1Err&0xF)<<16; }
+        void setS2Err(uint8_t newS2Err)               { _binaryData[0] = (_binaryData[0]&~(0xF<<20)) | (newS2Err&0xF)<<20; }
+        void setCOLDATA(int num, uint16_t newCOLDATA) { _binaryData[1+num/2] = (_binaryData[1+num/2]&~(0xFFFF<<(16*(num%2)))) | (uint32_t)newCOLDATA<<(16*(num%2)); }
+    };
+    
+    class Frame {
+        // Frame structure from Eric Hazen's preliminary WIB->FELIX frame format:
+        // http://docs.dunescience.org/cgi-bin/RetrieveFile?docid=1701&filename=ProtoDUNE_to_FELIX.pdf&version=1
+    private:
+        WIB_header head;
+        COLDATA_block block[4];
+        uint32_t* _binaryData[116]; // Pointers to all data of a single frame for easy access.
+    public:
+        // Frame constructor links the binary data from the header and block structs.
+        Frame() {
+            for(int i=0; i<3; i++)
+                _binaryData[i] = &head._binaryData[i];
+            _binaryData[115] = &head._binaryData[3];
+            
+            for(int i=0; i<4*28; i++)
+                _binaryData[3+(i/28)*28+i%28] = &block[i/28]._binaryData[i%28];
+        }
+        
+        // Header/footer accessors.
+        const uint8_t  getStreamID()        { return head.getStreamID(); }      // Data type (trigger, calibration, unbiased, etc.) to route data.
+        const uint32_t getResetCount()      { return head.getResetCount(); }    // Increments by one every 2^16 frames.
+        const uint32_t getWIBTimestamp()    { return head.getWIBTimestamp(); }  // Local timestamp.
+        const uint8_t  getCrateNo()         { return head.getCrateNo(); }       // Crate number.
+        const uint8_t  getSlotNo()          { return head.getSlotNo(); }        // Slot number.
+        const uint8_t  getFiberNo()         { return head.getFiberNo(); }       // Fiber number.
+        const uint8_t  getCapture()         { return head.getCapture(); }       // Error bit set if an error occurred during data capture.
+        const uint8_t  getASIC()            { return head.getASIC(); }          // Error bit set if an error was logged in ASIC data.
+        const uint8_t  getWIBErrors()       { return head.getWIBErrors(); }     // Error bit set by the WIB.
+        const uint32_t getCRC32()           { return head.getCRC32(); }         // Complete checksum of frame.
+        // COLDATA blocks accessors.
+        const uint8_t  getChecksumA(int blockNum)           { return block[blockNum].getChecksumA(); }  // Checksum of individual COLDATA blocks.
+        const uint8_t  getChecksumB(int blockNum)           { return block[blockNum].getChecksumB(); }  // Checksum of individual COLDATA blocks.
+        const uint8_t  getS1Err(int blockNum)               { return block[blockNum].getS1Err(); }      // Indicate errors in capturing streams from COLDATA ASICS.
+        const uint8_t  getS2Err(int blockNum)               { return block[blockNum].getS2Err(); }      // Indicate errors in capturing streams from COLDATA ASICS.
+        const uint16_t getCOLDATA(int blockNum, int num)    { return block[blockNum].getCOLDATA(num); } // Raw data.
+        // Struct accessors.
+        const WIB_header getWIBHeader()                     { return head; }
+        const COLDATA_block getCOLDATABlock(int blockNum)   { return block[blockNum]; }
+        
+        // Header/footer mutators.
+        void setStreamID(uint8_t newStreamID)           { head.setStreamID(newStreamID); }
+        void setResetCount(uint32_t newResetCount)      { head.setResetCount(newResetCount); }
+        void setWIBTimestamp(uint32_t newWIBTimestamp)  { head.setWIBTimestamp(newWIBTimestamp); }
+        void setCrateNo(uint8_t newCrateNo)             { head.setCrateNo(newCrateNo); }
+        void setSlotNo(uint8_t newSlotNo)               { head.setSlotNo(newSlotNo); }
+        void setFiberNo(uint8_t newFiberNo)             { head.setFiberNo(newFiberNo); }
+        void setCapture(uint8_t newCapture)             { head.setCapture(newCapture); }
+        void setASIC(uint8_t newASIC)                   { head.setASIC(newASIC); }
+        void setWIBErrors(uint8_t newWIBErrors)         { head.setWIBErrors(newWIBErrors); }
+        void setCRC32(uint32_t newCRC32)                { head.setCRC32(newCRC32); }
+        // COLDATA blocks mutators.
+        void setChecksumA(int blockNum, uint8_t newChecksumA)       { block[blockNum].setChecksumA(newChecksumA); }
+        void setChecksumB(int blockNum, uint8_t newChecksumB)       { block[blockNum].setChecksumB(newChecksumB); }
+        void setS1Err(int blockNum, uint8_t newS1Err)               { block[blockNum].setS1Err(newS1Err); }
+        void setS2Err(int blockNum, uint8_t newS2Err)               { block[blockNum].setS2Err(newS2Err); }
+        void setCOLDATA(int blockNum, int num, uint16_t newCOLDATA) { block[blockNum].setCOLDATA(num, newCOLDATA); }
+        // Struct mutators.
+        void setWIBHeader(WIB_header newWIBHeader)                          { head = newWIBHeader; }
+        void setCOLDATABlock(int blockNum, COLDATA_block newCOLDATABlock)   { block[blockNum] = newCOLDATABlock; }
         
         bool load(const std::string& filename, int frameNum = 0);
         void load(std::ifstream& strm, int frameNum = 0);
@@ -90,7 +155,7 @@ namespace framegen {
     class FrameGen {
     private:
         // File data.
-        std::string _path = "frames/";
+        std::string _path = "exampleframes/";
         std::string _prefix = "test";
         std::string _suffix = "";
         std::string _extension = ".frame";

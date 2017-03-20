@@ -21,8 +21,8 @@ namespace framegen {
             return false;
         }
         ifile.seekg(0,std::ios_base::end);
-        if(ifile.tellg()<(frameNum+1)*480) {
-            std::cout << "Error (Frame::load): file " << filename << " contains fewer than " << frameNum << " frames." << std::endl;
+        if(ifile.tellg()<(frameNum+1)*464) {
+            std::cout << "Error (Frame::load): file " << filename << " contains fewer than " << frameNum+1 << " frames." << std::endl << "Be sure to start counting at 0." << std::endl;
             return false;
         }
         
@@ -33,9 +33,9 @@ namespace framegen {
     }
     
     void Frame::load(std::ifstream& strm, int frameNum) {
-        strm.seekg(frameNum*480);
-        for(int i=0; i<120; i++)
-            _binaryData[i] = (uint32_t)strm.get() | strm.get()<<8 | strm.get()<<16 | strm.get()<<24;
+        strm.seekg(frameNum*464);
+        for(int i=0; i<116; i++)
+            *_binaryData[i] = (uint32_t)strm.get() | strm.get()<<8 | strm.get()<<16 | strm.get()<<24;
     }
     
     bool Frame::print(const std::string& filename) {
@@ -55,8 +55,9 @@ namespace framegen {
     bool Frame::print(std::ofstream& strm) {
         if(!strm)
             return false;
-        for(int i=0; i<120; i++)
-            strm << (char)_binaryData[i] << (char)(_binaryData[i]>>8) << (char)(_binaryData[i]>>16) << (char)(_binaryData[i]>>24);
+        for(int i=0; i<116; i++)
+            strm << (char)(*_binaryData[i]) << (char)(*_binaryData[i]>>8) << (char)(*_binaryData[i]>>16) << (char)(*_binaryData[i]>>24);
+//            strm << std::hex << std::setfill('0') << "0x" << std::setw(8) << _binaryData[i] << "," << std::endl;
         return true;
     }
     
@@ -69,10 +70,10 @@ namespace framegen {
         uint8_t result = init;
         for(unsigned int i=4+blockNum*28; i<4+blockNum*28+27; i++) {
             // Divide 32-bit into 8-bit and XOR.
-            result ^= (_binaryData[i]<<24)>>24;
-            result ^= (_binaryData[i]<<16)>>24;
-            result ^= (_binaryData[i]<<8)>>24;
-            result ^= _binaryData[i]>>24;
+            result ^= (*_binaryData[i]<<24)>>24;
+            result ^= (*_binaryData[i]<<16)>>24;
+            result ^= (*_binaryData[i]<<8)>>24;
+            result ^= *_binaryData[i]>>24;
         }
         return result;
     }
@@ -86,23 +87,23 @@ namespace framegen {
         uint8_t result = init;
         for(unsigned int i=4+blockNum*28; i<4+blockNum*28+27; i++) {
             // Divide 32-bit into 8-bit and add.
-            result += (_binaryData[i]<<24)>>24;
-            result += (_binaryData[i]<<16)>>24;
-            result += (_binaryData[i]<<8)>>24;
-            result += _binaryData[i]>>24;
+            result += (*_binaryData[i]<<24)>>24;
+            result += (*_binaryData[i]<<16)>>24;
+            result += (*_binaryData[i]<<8)>>24;
+            result += *_binaryData[i]>>24;
         }
         return -result;
     }
     
     // Cyclic redundancy check (32-bit).
     uint32_t Frame::CRC32(uint32_t padding, uint64_t CRC32_Polynomial) {
-        uint64_t shiftReg = (uint64_t)_binaryData[0]<<1 | ((_binaryData[1]>>31)&1); // Shifting register.
+        uint64_t shiftReg = (uint64_t)(*_binaryData[0])<<1 | ((*_binaryData[1]>>31)&1); // Shifting register.
         // Shift through the data.
         for(int i=0; i<114*32; i++) { // The register shifts through 115 32-bit words and is 33 bits long.
             // Perform XOR on the shifting register if the leading bit is 1 and shift.
             if(shiftReg & (1UL<<33))
                 shiftReg ^= CRC32_Polynomial;
-            shiftReg = shiftReg<<1 | ((_binaryData[i/32+1]>>(31-(i%32)))&1);
+            shiftReg = shiftReg<<1 | ((*_binaryData[i/32+1]>>(31-(i%32)))&1);
         }
         // Shift through padding.
         for(int i=0; i<32; i++) {
@@ -124,9 +125,14 @@ namespace framegen {
     void FrameGen::fill(std::ofstream& ofile) {
         // Header.
         _frame.setStreamID(rand()%8);
-        _frame.setResetCount(rand()%(1<<24));
+        _frame.setResetCount(numberOfFrames>>16);
         
-        _frame.setWIBTimestamp(time(nullptr));
+        { // Small timestamp scope.
+            using namespace std::chrono;
+            static nanoseconds time = duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch());
+            _frame.setWIBTimestamp(duration_cast<nanoseconds>(time).count());
+            time += nanoseconds(500);
+        }
         
         _frame.setCrateNo(rand()%32);
         _frame.setSlotNo(rand()%8);
@@ -159,6 +165,9 @@ namespace framegen {
         
         // Print the generated data to frame.
         _frame.print(ofile);
+        
+        // Increment the number of frames.
+        numberOfFrames++;
     }
     
     // Main generator function: builds frames and calls the fill function.
@@ -306,11 +315,11 @@ namespace framegen {
         
         // Get number of frames and check whether this is an integer.
         ifile.seekg(0,ifile.end);
-        if(ifile.tellg()%480) {
+        if(ifile.tellg()%464) {
             std::cout << "Error: file " << filename << " contains unreadable frames." << std::endl;
             return false;
         }
-        int numberOfFrames = ifile.tellg()/480;
+        int numberOfFrames = ifile.tellg()/464;
         ifile.seekg(0,ifile.beg);
         
         Frame frame;
