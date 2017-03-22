@@ -13,7 +13,7 @@ namespace framegen {
     //=======
     // Frame
     //=======
-    bool Frame::load(const std::string& filename, int frameNum) {
+    bool Frame::load(std::string filename, int frameNum) {
         // Open file which contains frame to load and move pointer to the beginning of the frame.
         std::ifstream ifile(filename);
         if(!ifile) {
@@ -38,26 +38,41 @@ namespace framegen {
             *_binaryData[i] = (uint32_t)strm.get() | strm.get()<<8 | strm.get()<<16 | strm.get()<<24;
     }
     
-    bool Frame::print(const std::string& filename) {
+    bool Frame::print(std::string filename, char opt) {
         std::ofstream oframe(filename, std::ios_base::app);
         if(!oframe) {
             std::cout << "Error (Frame::print): file " << filename << " could not be accessed." << std::endl;
             return false;
         }
-        
-        bool result = print(oframe);
-        
+        bool result = print(oframe, opt);
         oframe.close();
-        
         return result;
     }
     
-    bool Frame::print(std::ofstream& strm) {
+    bool Frame::print(std::ofstream& strm, char opt) {
         if(!strm)
             return false;
-        for(int i=0; i<116; i++)
-            strm << (char)(*_binaryData[i]) << (char)(*_binaryData[i]>>8) << (char)(*_binaryData[i]>>16) << (char)(*_binaryData[i]>>24);
-//            strm << std::hex << std::setfill('0') << "0x" << std::setw(8) << _binaryData[i] << "," << std::endl;
+        switch(opt) {
+            case 'b':
+                for(int i=0; i<116; i++)
+                    strm << (char)(*_binaryData[i]) << (char)(*_binaryData[i]>>8) << (char)(*_binaryData[i]>>16) << (char)(*_binaryData[i]>>24);
+                break;
+            case 'h':
+                for(int i=0; i<116; i++)
+                    strm << std::hex << std::setfill('0') << "0x" << std::setw(8) << *_binaryData[i] << std::endl;
+                break;
+            case 'o':
+                for(int i=0; i<116; i++)
+                    strm << std::oct << std::setfill('0') << "0" << std::setw(16) << *_binaryData[i] << std::endl;
+                break;
+            case 'd':
+                for(int i=0; i<116; i++)
+                    strm << std::setfill('0') << std::setw(10) << *_binaryData[i] << std::endl;
+                break;
+            default:
+                std::cout << "Error (Frame::print()): unknown print option '" << opt << "'." << std::endl;
+                return false;
+        }
         return true;
     }
     

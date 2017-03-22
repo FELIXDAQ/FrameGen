@@ -21,53 +21,79 @@
 #include "zlib.h"
 
 #define CRC32_POLYNOMIAL 6186310019 // Polynomial to compute the CRC32 checksum (random 33-bit). Needs to be >=2^32.
+#define BIT_RANGE(d,b,e) (d>>b)&((1<<(e-b))-1)
 
 namespace framegen {
     
     static uint64_t numberOfFrames = 0;
     
+    const uint32_t getBitRange(const uint32_t& word, int begin, int end) {
+        if(begin==0 && end==31)
+            return word;
+        else
+            return (word>>begin)&((1<<(end-begin+1))-1);
+    };
+    
+    template <typename T>
+    void setBitRange(uint32_t& word, T& newValue, int begin, int end) {
+        if(begin==0 && end==31) {
+            word = newValue;
+            return;
+        }
+        uint32_t mask = (1<<(end-begin+1))-1;
+        word = (word&~(mask<<begin)) | ((newValue&mask)<<begin);
+    };
+    
     struct WIB_header {
         // Header/footer accessors.
         uint32_t _binaryData[4];
-        const uint8_t  getStreamID()        { return _binaryData[0]; }              // Data type (trigger, calibration, unbiased, etc.) to route data.
-        const uint32_t getResetCount()      { return _binaryData[0]>>8; }           // Increments by one every 2^16 frames.
-        const uint32_t getWIBTimestamp()    { return _binaryData[1]; }              // Local timestamp.
-        const uint8_t  getCrateNo()         { return _binaryData[2]&0x1F; }         // Crate number.
-        const uint8_t  getSlotNo()          { return (_binaryData[2]>>5)&0x7; }     // Slot number.
-        const uint8_t  getFiberNo()         { return (_binaryData[2]>>8)&0x7; }     // Fiber number.
-        const uint8_t  getCapture()         { return (_binaryData[2]>>16)&0xF; }    // Error bit set if an error occurred during data capture.
-        const uint8_t  getASIC()            { return (_binaryData[2]>>20)&0xF; }    // Error bit set if an error was logged in ASIC data.
-        const uint8_t  getWIBErrors()       { return _binaryData[2]>>16; }          // Error bit set by the WIB.
-        const uint32_t getCRC32()           { return _binaryData[3]; }              // Complete checksum of frame.
+        const uint8_t  getStreamID()        { return getBitRange(_binaryData[0],0,7); }     // Data type (trigger, calibration, unbiased, etc.) to route data.
+        const uint32_t getResetCount()      { return getBitRange(_binaryData[0],8,31); }    // Increments by one every 2^16 frames.
+        
+        const uint32_t getWIBTimestamp()    { return getBitRange(_binaryData[1],0,31); }    // Local timestamp.
+        
+        const uint8_t  getCrateNo()         { return getBitRange(_binaryData[2],0,4); }     // Crate number.
+        const uint8_t  getSlotNo()          { return getBitRange(_binaryData[2],5,7); }     // Slot number.
+        const uint8_t  getFiberNo()         { return getBitRange(_binaryData[2],8,10); }    // Fiber number.
+        const uint8_t  getCapture()         { return getBitRange(_binaryData[2],16,19); }   // Error bit set if an error occurred during data capture.
+        const uint8_t  getASIC()            { return getBitRange(_binaryData[2],20,23); }   // Error bit set if an error was logged in ASIC data.
+        const uint8_t  getWIBErrors()       { return getBitRange(_binaryData[2],24,31); }   // Error bit set by the WIB.
+        
+        const uint32_t getCRC32()           { return getBitRange(_binaryData[3],0,31); }    // Complete checksum of frame.
         
         // Header/footer mutators.
-        void setStreamID(uint8_t newStreamID)           { _binaryData[0] = (_binaryData[0]&~(0xFF)) | newStreamID; }
-        void setResetCount(uint32_t newResetCount)      { _binaryData[0] = (_binaryData[0]&0xFF) | newResetCount<<8; }
-        void setWIBTimestamp(uint32_t newWIBTimestamp)  { _binaryData[1] = newWIBTimestamp; }
-        void setCrateNo(uint8_t newCrateNo)             { _binaryData[2] = (_binaryData[2]&~(0x1F)) | (newCrateNo&0x1F); }
-        void setSlotNo(uint8_t newSlotNo)               { _binaryData[2] = (_binaryData[2]&~(0x7<<5)) | (newSlotNo&0x7)<<5; }
-        void setFiberNo(uint8_t newFiberNo)             { _binaryData[2] = (_binaryData[2]&~(0x7<<8)) | (newFiberNo&0x7)<<8; }
-        void setCapture(uint8_t newCapture)             { _binaryData[2] = (_binaryData[2]&~(0xF<<16)) | (newCapture&0xF)<<16; }
-        void setASIC(uint8_t newASIC)                   { _binaryData[2] = (_binaryData[2]&~(0xF<<20)) | (newASIC&0xF)<<20; }
-        void setWIBErrors(uint8_t newWIBErrors)         { _binaryData[2] = (_binaryData[2]&~(0xFF<<24)) | newWIBErrors<<24; }
-        void setCRC32(uint32_t newCRC32)                { _binaryData[3] = newCRC32; }
+        void setStreamID(uint8_t newStreamID)           { setBitRange(_binaryData[0],newStreamID,0,7); }
+        void setResetCount(uint32_t newResetCount)      { setBitRange(_binaryData[0],newResetCount,8,31); }
+        
+        void setWIBTimestamp(uint32_t newWIBTimestamp)  { setBitRange(_binaryData[1],newWIBTimestamp,0,31); }
+                                                                      
+        void setCrateNo(uint8_t newCrateNo)             { setBitRange(_binaryData[2],newCrateNo,0,4); }
+        void setSlotNo(uint8_t newSlotNo)               { setBitRange(_binaryData[2],newSlotNo,5,7); }
+        void setFiberNo(uint8_t newFiberNo)             { setBitRange(_binaryData[2],newFiberNo,8,10); }
+        void setCapture(uint8_t newCapture)             { setBitRange(_binaryData[2],newCapture,16,19); }
+        void setASIC(uint8_t newASIC)                   { setBitRange(_binaryData[2],newASIC,20,23); }
+        void setWIBErrors(uint8_t newWIBErrors)         { setBitRange(_binaryData[2],newWIBErrors,24,31); }
+                                                                      
+        void setCRC32(uint32_t newCRC32)                { setBitRange(_binaryData[3],newCRC32,0,31); }
     };
     
     struct COLDATA_block {
         uint32_t _binaryData[28];
         // COLDATA blocks accessors.
-        const uint8_t  getChecksumA()       { return _binaryData[0]; }                          // Checksum of individual COLDATA blocks.
-        const uint8_t  getChecksumB()       { return _binaryData[0]>>8; }                       // Checksum of individual COLDATA blocks.
-        const uint8_t  getS1Err()           { return (_binaryData[0]>>16)&0xF; }                // Indicate errors in capturing streams from COLDATA ASICS.
-        const uint8_t  getS2Err()           { return (_binaryData[0]>>20)&0xF; }                // Indicate errors in capturing streams from COLDATA ASICS.
-        const uint16_t getCOLDATA(int num)  { return _binaryData[1+num/2]>>(16*(1-num%2)); }    // Raw data.
+        const uint8_t  getChecksumA()       { return getBitRange(_binaryData[0],0,7); }     // Checksum of individual COLDATA blocks.
+        const uint8_t  getChecksumB()       { return getBitRange(_binaryData[0],8,15); }    // Checksum of individual COLDATA blocks.
+        const uint8_t  getS1Err()           { return getBitRange(_binaryData[0],16,19); }   // Indicate errors in capturing streams from COLDATA ASICS.
+        const uint8_t  getS2Err()           { return getBitRange(_binaryData[0],20,23); }   // Indicate errors in capturing streams from COLDATA ASICS.
+        
+        const uint16_t getCOLDATA(int num)  { return getBitRange(_binaryData[1+num/2],16*(1-(num%2)),16*(2-(num%2))); } // Raw data.
         
         // COLDATA blocks mutators.
-        void setChecksumA(uint8_t newChecksumA)       { _binaryData[0] = (_binaryData[0]&~(0xFF)) | newChecksumA; }
-        void setChecksumB(uint8_t newChecksumB)       { _binaryData[0] = (_binaryData[0]&~(0xFF<<8)) | newChecksumB<<8; }
-        void setS1Err(uint8_t newS1Err)               { _binaryData[0] = (_binaryData[0]&~(0xF<<16)) | (newS1Err&0xF)<<16; }
-        void setS2Err(uint8_t newS2Err)               { _binaryData[0] = (_binaryData[0]&~(0xF<<20)) | (newS2Err&0xF)<<20; }
-        void setCOLDATA(int num, uint16_t newCOLDATA) { _binaryData[1+num/2] = (_binaryData[1+num/2]&~(0xFFFF<<(16*(num%2)))) | (uint32_t)newCOLDATA<<(16*(num%2)); }
+        void setChecksumA(uint8_t newChecksumA)       { setBitRange(_binaryData[0],newChecksumA,0,7); }
+        void setChecksumB(uint8_t newChecksumB)       { setBitRange(_binaryData[0],newChecksumB,8,15); }
+        void setS1Err(uint8_t newS1Err)               { setBitRange(_binaryData[0],newS1Err,16,19); }
+        void setS2Err(uint8_t newS2Err)               { setBitRange(_binaryData[0],newS2Err,20,23); }
+        
+        void setCOLDATA(int num, uint16_t newCOLDATA) { setBitRange(_binaryData[1+num/2],newCOLDATA,16*(1-(num%2)),16*(2-(num%2))); }
     };
     
     class Frame {
@@ -130,10 +156,10 @@ namespace framegen {
         void setWIBHeader(WIB_header newWIBHeader)                          { head = newWIBHeader; }
         void setCOLDATABlock(int blockNum, COLDATA_block newCOLDATABlock)   { block[blockNum] = newCOLDATABlock; }
         
-        bool load(const std::string& filename, int frameNum = 0);
+        bool load(std::string filename, int frameNum = 0);
         void load(std::ifstream& strm, int frameNum = 0);
-        bool print(const std::string& filename);
-        bool print(std::ofstream& strm);
+        bool print(std::string filename, char opt = 'b');
+        bool print(std::ofstream& strm, char opt = 'b');
         
         // Longitudinal redundancy check (8-bit).
         uint8_t checksum_A(unsigned int blockNum, uint8_t init = 0);
