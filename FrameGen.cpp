@@ -21,7 +21,7 @@ namespace framegen {
             return false;
         }
         ifile.seekg(0,std::ios_base::end);
-        if(ifile.tellg()<(frameNum+1)*464) {
+        if(ifile.tellg()<(frameNum+1)*(FRAME_LENGTH*4)) {
             std::cout << "Error (Frame::load): file " << filename << " contains fewer than " << frameNum+1 << " frames." << std::endl << "Be sure to start counting at 0." << std::endl;
             return false;
         }
@@ -33,8 +33,8 @@ namespace framegen {
     }
     
     void Frame::load(std::ifstream& strm, int frameNum) {
-        strm.seekg(frameNum*464);
-        for(int i=0; i<116; i++)
+        strm.seekg(frameNum*FRAME_LENGTH*4);
+        for(int i=0; i<FRAME_LENGTH; i++)
             *_binaryData[i] = (uint32_t)strm.get() | strm.get()<<8 | strm.get()<<16 | strm.get()<<24;
     }
     
@@ -78,7 +78,7 @@ namespace framegen {
         if(shiftReg&1)
             shiftReg ^= CRC32_Polynomial;
         // Shift through the data.
-        for(int i=0; i<114*32; i++) { // The register shifts through 115 32-bit words and is 32 bits long.
+        for(int i=0; i<(FRAME_LENGTH-2)*32; i++) { // The register shifts through FRAME_LENGTH-1 32-bit words and is 32 bits long.
             // Perform XOR on the shifting register if the leading bit is 1 and shift.
             if(shiftReg & 1) {
                 shiftReg = shiftReg>>1 | (*_binaryData[i/32+1]>>(i%32)&1)<<31;
@@ -301,11 +301,11 @@ namespace framegen {
         
         // Get number of frames and check whether this is an integer.
         ifile.seekg(0,ifile.end);
-        if(ifile.tellg()%464) {
+        if(ifile.tellg()%(FRAME_LENGTH*4)) {
             std::cout << "Error: file " << filename << " contains unreadable frames." << std::endl;
             return false;
         }
-        int numberOfFrames = ifile.tellg()/464;
+        int numberOfFrames = ifile.tellg()/(FRAME_LENGTH*4);
         ifile.seekg(0,ifile.beg);
         
         Frame frame;
@@ -365,37 +365,38 @@ namespace framegen {
         // b = binary, h = hexadecimal, o = octal, d = decimal, f = header file
         switch(opt) {
             case 'b':
-                for(int i=0; i<116; i++)
+                for(int i=0; i<FRAME_LENGTH; i++)
                     strm << (char)(*frame._binaryData[i]) << (char)(*frame._binaryData[i]>>8) << (char)(*frame._binaryData[i]>>16) << (char)(*frame._binaryData[i]>>24);
                 break;
             case 'h':
-                for(int i=0; i<116; i++)
+                for(int i=0; i<FRAME_LENGTH; i++)
                     strm << std::hex << std::setfill('0') << "0x" << std::setw(8) << *frame._binaryData[i] << std::endl;
                 break;
             case 'o':
-                for(int i=0; i<116; i++)
+                for(int i=0; i<FRAME_LENGTH; i++)
                     strm << std::oct << std::setfill('0') << "0" << std::setw(11) << *frame._binaryData[i] << std::endl;
                 break;
             case 'd':
-                for(int i=0; i<116; i++)
+                for(int i=0; i<FRAME_LENGTH; i++)
                     strm << std::setfill('0') << std::setw(10) << *frame._binaryData[i] << std::endl;
                 break;
             case 'f':
                 // Add a header if this is the first frame. Otherwise adjust the cursor accordingly.
                 if(strm.tellp()==0)
-                    strm << "const uint32_t PROTODUNE_FRAMESIZE = 116*4;\n"
+                    strm << "#ifndef PROTODUNE_H__\n#define PROTODUNE_H__\n\n"
+                    << "const uint32_t PROTODUNE_FRAMESIZE = 116*4;\n"
                     << "const uint32_t PROTODUNE_FRAMENUM = " << Nframes << ";\n\n"
                     << "uint32_t PROTODUNE_DATA[] = {";
                 else {
-                    strm.seekp(-3, std::ios::end);
+                    strm.seekp(-13, std::ios::end);
                     strm << ",";
                 }
                 // Enter data.
                 strm << std::endl << std::hex << std::setfill('0') << "    0x" << std::setw(8) << *frame._binaryData[0];
-                for(int i=1; i<116; i++) {
+                for(int i=1; i<FRAME_LENGTH; i++) {
                     strm << "," << std::endl << std::setfill('0') << "    0x" << std::setw(8) << *frame._binaryData[i];
                 }
-                strm << std::endl << "};";
+                strm << std::endl << "};\n\n#endif";
                 break;
             default:
                 std::cout << "Error (Frame::print()): unknown print option '" << opt << "'." << std::endl;

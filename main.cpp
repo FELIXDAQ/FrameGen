@@ -52,5 +52,10 @@ int main(int argc, char* argv[]) {
     Fr.setWIBHeader(head);
     Fr.setCOLDATABlock(1, block);
     
+    // Create a frame with the 1.0 structure.
+    framegen::Frame_1_0_0 Fr2;
+    Fr2.setZ(1);
+    //Fr2.print("exampleframes/new.frame"); // No printing functionality yet.
+    
     return 0;
 }

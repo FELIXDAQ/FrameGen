@@ -20,12 +20,26 @@
 
 #include "zlib.h"
 
-#define CRC32_POLYNOMIAL 3988292384//7976584769//4374732215//6186310019 // Polynomial to compute the CRC32 checksum (random 33-bit). Needs to be >=2^32.
+#define FRAME_LENGTH 116
+#define CRC32_POLYNOMIAL 3988292384
 
 namespace framegen {
     
     static uint64_t numberOfFrames = 0;
     
+    // Forward declarations and typedefs for version control.
+    struct WIB_header_0_3_0;
+    struct WIB_header_1_0_0;
+    struct COLDATA_block_0_3_0;
+    struct COLDATA_block_1_0_0;
+    class Frame_0_3_0;
+    class Frame_1_0_0;
+    
+    typedef WIB_header_0_3_0    WIB_header;
+    typedef COLDATA_block_0_3_0 COLDATA_block;
+    typedef Frame_0_3_0         Frame;
+    
+    // TO DO: Convert to uint64_t-compatible version.
     const uint32_t getBitRange(const uint32_t& word, int begin, int end) {
         if(begin==0 && end==31)
             return word;
@@ -33,10 +47,8 @@ namespace framegen {
             return (word>>begin)&((1<<(end-begin+1))-1);
     };
     
-    const uint8_t getBit(const uint32_t& word, int num) { return (word>>num)&1; };
-    
     template <typename T>
-    void setBitRange(uint32_t& word, T& newValue, int begin, int end) {
+    void setBitRange(uint32_t& word, const T& newValue, int begin, int end) {
         if(begin==0 && end==31) {
             word = newValue;
             return;
@@ -45,7 +57,7 @@ namespace framegen {
         word = (word&~(mask<<begin)) | ((newValue&mask)<<begin);
     };
     
-    struct WIB_header {
+    struct WIB_header_0_3_0 {
         // Header/footer accessors.
         uint32_t _binaryData[4];
         const uint8_t  getStreamID()        { return getBitRange(_binaryData[0],0,7); }     // Data type (trigger, calibration, unbiased, etc.) to route data.
@@ -67,18 +79,18 @@ namespace framegen {
         void setResetCount(uint32_t newResetCount)      { setBitRange(_binaryData[0],newResetCount,8,31); }
         
         void setWIBTimestamp(uint32_t newWIBTimestamp)  { setBitRange(_binaryData[1],newWIBTimestamp,0,31); }
-                                                                      
+        
         void setCrateNo(uint8_t newCrateNo)             { setBitRange(_binaryData[2],newCrateNo,0,4); }
         void setSlotNo(uint8_t newSlotNo)               { setBitRange(_binaryData[2],newSlotNo,5,7); }
         void setFiberNo(uint8_t newFiberNo)             { setBitRange(_binaryData[2],newFiberNo,8,10); }
         void setCapture(uint8_t newCapture)             { setBitRange(_binaryData[2],newCapture,16,19); }
         void setASIC(uint8_t newASIC)                   { setBitRange(_binaryData[2],newASIC,20,23); }
         void setWIBErrors(uint8_t newWIBErrors)         { setBitRange(_binaryData[2],newWIBErrors,24,31); }
-                                                                      
+        
         void setCRC32(uint32_t newCRC32)                { setBitRange(_binaryData[3],newCRC32,0,31); }
     };
     
-    struct COLDATA_block {
+    struct COLDATA_block_0_3_0 {
         uint32_t _binaryData[28];
         // COLDATA blocks accessors.
         const uint8_t  getChecksumA()       { return getBitRange(_binaryData[0],0,7); }     // Checksum of individual COLDATA blocks.
@@ -97,19 +109,123 @@ namespace framegen {
         void setCOLDATA(int num, uint16_t newCOLDATA) { setBitRange(_binaryData[1+num/2],newCOLDATA,16*(1-(num%2)),16*(2-(num%2))); }
     };
     
-    class Frame {
-        // Frame structure from Eric Hazen's preliminary WIB->FELIX frame format:
+    struct WIB_header_1_0_0 {
+        // Header/footer accessors.
+        uint32_t _binaryData[5];
+        const uint8_t getK28_5()    { return getBitRange(_binaryData[0],0,7); }     // K28.5 only for RCE, undefined for FELIX.
+        const uint8_t getVersion()  { return getBitRange(_binaryData[0],8,12); }    // Version number.
+        const uint8_t  getFiberNo() { return getBitRange(_binaryData[0],13,15); }   // Fiber number.
+        const uint8_t  getCrateNo() { return getBitRange(_binaryData[0],16,20); }   // Crate number.
+        const uint8_t  getSlotNo()  { return getBitRange(_binaryData[0],21,23); }   // Slot number.
+        
+        const uint16_t  getWIBErrors()  { return getBitRange(_binaryData[1],16,31); }   // Error bit set by the WIB. Details TBD.
+        
+        const uint8_t getZ()            { return getBitRange(_binaryData[3],31,31); }
+        const uint64_t getTimestamp()   {
+            return (uint64_t)getBitRange(_binaryData[2],0,31)
+            | (uint64_t)getBitRange(_binaryData[3],0,15)<<31
+            | (getZ()? 0: ((uint64_t)getBitRange(_binaryData[3],16,30)<<47));
+        }    // Timestamp. 63 bit if Z==0, 48 bit if Z==1.
+        const uint16_t getWIBCounter()  { return getZ()? getBitRange(_binaryData[3],16,30): 0; } // WIB Counter, only exists when Z==1.
+        
+        const uint32_t getCRC32()       { return getBitRange(_binaryData[4],0,31); }    // Complete checksum of frame.
+        
+        // Header/footer mutators.
+        void setK28_5(uint8_t newK28_5)     { setBitRange(_binaryData[0],newK28_5,0,7); }
+        void setVersion(uint8_t newVersion) { setBitRange(_binaryData[0],newVersion,8,12); }
+        void setFiberNo(uint8_t newFiberNo) { setBitRange(_binaryData[0],newFiberNo,13,15); }
+        void setCrateNo(uint8_t newCrateNo) { setBitRange(_binaryData[0],newCrateNo,16,20); }
+        void setSlotNo(uint8_t newSlotNo)   { setBitRange(_binaryData[0],newSlotNo,21,23); }
+        
+        void setWIBErrors(uint16_t newWIBErrors)     { setBitRange(_binaryData[1],newWIBErrors,16,31); }
+        
+        void setZ(uint8_t newZ)             { setBitRange(_binaryData[3],newZ,31,31); }
+        void setTimestamp(uint64_t newTimestamp)     {
+            setBitRange(_binaryData[2],getBitRange(newTimestamp,0,31),0,31);
+            setBitRange(_binaryData[3],getBitRange(newTimestamp>>31,0,15),0,15);
+            if(getZ()==0) setBitRange(_binaryData[3],getBitRange(newTimestamp>>31,16,30),16,30);
+        }
+        void setWIBCounter(uint16_t newWIBCounter)    { if(getZ()==1) setBitRange(_binaryData[3],newWIBCounter,16,30); }
+        
+        void setCRC32(uint32_t newCRC32)         { setBitRange(_binaryData[4],newCRC32,0,31); }
+    };
+    
+    struct COLDATA_block_1_0_0 {
+        uint32_t _binaryData[28];
+        // COLDATA block accessors.
+        const uint16_t  getChecksumA()  { return getBitRange(_binaryData[0],16,23) | getBitRange(_binaryData[1],16,23)<<8; } // Odd streams. (TODO)
+        const uint16_t  getChecksumB()  { return getBitRange(_binaryData[0],24,31) | getBitRange(_binaryData[1],24,31)<<8; } // Even streams. (TODO)
+        const uint16_t  getAErr()       { return getBitRange(_binaryData[2],16,23) | getBitRange(_binaryData[3],16,23)<<8; } // Odd streams. (TODO)
+        const uint16_t  getBErr()       { return getBitRange(_binaryData[2],24,31) | getBitRange(_binaryData[3],24,31)<<8; } // Even streams. (TODO)
+        
+        const uint16_t getCOLDATA(unsigned int stream, unsigned int channel)  { // WARNING: stream [1:8], channel [1:8].
+            // Channel 3 and 6 are broken up in the current design of COLDATA.
+            if(stream<1 || channel <1 || stream>8 || channel>8) {
+                std::cout << "Error (getCOLDATA()): stream or channel out of [1:8] range." << std::endl;
+                return 0;
+            }
+            switch(channel) {
+                case 3:
+                    return getBitRange(_binaryData[4+stream*28],24,31) | getBitRange(_binaryData[4+stream*28+1],0,3)<<8;
+                case 6:
+                    return getBitRange(_binaryData[4+stream*28+1],28,31) | getBitRange(_binaryData[4+stream*28+2],0,7)<<4;
+                default:
+                    return getBitRange(_binaryData[4+stream*28+(channel-1)*12/32],((channel-1)*12)%32,(channel*12)%32);
+            }
+        }
+        
+        // COLDATA block mutators.
+        void setChecksumA(uint16_t newChecksumA) {
+            setBitRange(_binaryData[0],getBitRange(newChecksumA,0,7),16,23);
+            setBitRange(_binaryData[1],getBitRange(newChecksumA,8,15),16,23);
+        }
+        void setChecksumB(uint16_t newChecksumB) {
+            setBitRange(_binaryData[0],getBitRange(newChecksumB,0,7),24,31);
+            setBitRange(_binaryData[1],getBitRange(newChecksumB,8,15),24,31);
+        }
+        void setAErr(uint8_t newAErr) {
+            setBitRange(_binaryData[2],getBitRange(newAErr,0,7),16,23);
+            setBitRange(_binaryData[3],getBitRange(newAErr,8,15),16,23);
+        }
+        void setBErr(uint8_t newBErr) {
+            setBitRange(_binaryData[2],getBitRange(newBErr,0,7),24,31);
+            setBitRange(_binaryData[3],getBitRange(newBErr,8,15),24,31);
+        }
+        
+        void setCOLDATA(unsigned int stream, unsigned int channel, uint16_t newCOLDATA) {
+            if(stream<1 || channel <1 || stream>8 || channel>8) {
+                std::cout << "Error (getCOLDATA()): stream or channel out of [1:8] range." << std::endl;
+                return;
+            }
+            switch(channel) {
+                case 3:
+                    setBitRange(_binaryData[4+stream*28],getBitRange(newCOLDATA,0,7),24,31);
+                    setBitRange(_binaryData[4+stream*28+1],getBitRange(newCOLDATA,8,11),0,3);
+                    break;
+                case 6:
+                    setBitRange(_binaryData[4+stream*28+1],getBitRange(newCOLDATA,0,3),28,31);
+                    setBitRange(_binaryData[4+stream*28+2],getBitRange(newCOLDATA,4,11),0,7);
+                    break;
+                default:
+                    setBitRange(_binaryData[4+stream*28+(channel-1)*12/32],newCOLDATA,((channel-1)*12)%32,(channel*12)%32);
+                    break;
+            }
+        }
+    };
+    
+    class Frame_0_3_0 {
+        // Frame structure 0.3 from Eric Hazen's preliminary WIB->FELIX frame format:
         // http://docs.dunescience.org/cgi-bin/RetrieveFile?docid=1701&filename=ProtoDUNE_to_FELIX.pdf&version=1
     private:
-        WIB_header head;
-        COLDATA_block block[4];
-        uint32_t* _binaryData[116]; // Pointers to all data of a single frame for easy access.
+        WIB_header_0_3_0 head;
+        COLDATA_block_0_3_0 block[4];
+        uint32_t* _binaryData[FRAME_LENGTH]; // Pointers to all data of a single frame for easy access.
     public:
         // Frame constructor links the binary data from the header and block structs.
-        Frame() {
+        Frame_0_3_0() {
             for(int i=0; i<3; i++)
                 _binaryData[i] = &head._binaryData[i];
-            _binaryData[115] = &head._binaryData[3];
+            _binaryData[FRAME_LENGTH-1] = &head._binaryData[3];
             
             for(int i=0; i<4*28; i++)
                 _binaryData[3+(i/28)*28+i%28] = &block[i/28]._binaryData[i%28];
@@ -133,8 +249,8 @@ namespace framegen {
         const uint8_t  getS2Err(int blockNum)               { return block[blockNum].getS2Err(); }      // Indicate errors in capturing streams from COLDATA ASICS.
         const uint16_t getCOLDATA(int blockNum, int num)    { return block[blockNum].getCOLDATA(num); } // Raw data.
         // Struct accessors.
-        const WIB_header getWIBHeader()                     { return head; }
-        const COLDATA_block getCOLDATABlock(int blockNum)   { return block[blockNum]; }
+        const WIB_header_0_3_0 getWIBHeader()               { return head; }
+        const COLDATA_block_0_3_0 getCOLDATABlock(int blockNum)   { return block[blockNum]; }
         
         // Header/footer mutators.
         void setStreamID(uint8_t newStreamID)           { head.setStreamID(newStreamID); }
@@ -154,8 +270,86 @@ namespace framegen {
         void setS2Err(int blockNum, uint8_t newS2Err)               { block[blockNum].setS2Err(newS2Err); }
         void setCOLDATA(int blockNum, int num, uint16_t newCOLDATA) { block[blockNum].setCOLDATA(num, newCOLDATA); }
         // Struct mutators.
-        void setWIBHeader(WIB_header newWIBHeader)                          { head = newWIBHeader; }
-        void setCOLDATABlock(int blockNum, COLDATA_block newCOLDATABlock)   { block[blockNum] = newCOLDATABlock; }
+        void setWIBHeader(WIB_header_0_3_0 newWIBHeader)                        { head = newWIBHeader; }
+        void setCOLDATABlock(int blockNum, COLDATA_block_0_3_0 newCOLDATABlock) { block[blockNum] = newCOLDATABlock; }
+        
+        bool load(std::string filename, int frameNum = 0);
+        void load(std::ifstream& strm, int frameNum = 0);
+        
+        // Longitudinal redundancy check (8-bit).
+        uint8_t checksum_A(unsigned int blockNum, uint8_t init = 0);
+        // Modular checksum (8-bit).
+        uint8_t checksum_B(unsigned int blockNum, uint8_t init = 0);
+        // Cyclic redundancy check (32-bit).
+        uint32_t CRC32(uint32_t padding = 0, uint32_t CRC32_Polynomial = CRC32_POLYNOMIAL);
+        // Zlib's cyclic redundancy check (32-bit).
+        uint32_t zCRC32(uint32_t padding = 0);
+        
+        // Overloaded and friended frame print functions.
+        bool print(std::string filename, char opt = 'b');
+        bool print(std::ofstream& strm, char opt = 'b');
+        friend bool print(const Frame& frame, std::string filename, char opt, const int Nframes);
+        friend bool print(const Frame& frame, std::ofstream& strm, char opt, const int Nframes);
+    };
+    
+    class Frame_1_0_0 {
+        // Frame structure 1.0 from Daniel Gastler.
+    private:
+        WIB_header_1_0_0 head;
+        COLDATA_block_1_0_0 block[4];
+        uint32_t* _binaryData[117]; // Pointers to all data of a single frame for easy access.
+    public:
+        // Frame constructor links the binary data from the header and block structs.
+        Frame_1_0_0() {
+            for(int i=0; i<4; i++)
+                _binaryData[i] = &head._binaryData[i];
+            _binaryData[116] = &head._binaryData[4];
+            
+            for(int i=0; i<4*28; i++)
+                _binaryData[4+(i/28)*28+i%28] = &block[i/28]._binaryData[i%28];
+        }
+        
+        // Header/footer accessors.
+        const uint8_t getK28_5()        { return head.getK28_5(); }         // K28.5 only for RCE, undefined for FELIX.
+        const uint8_t getVersion()      { return head.getVersion(); }       // Version number.
+        const uint8_t  getFiberNo()     { return head.getFiberNo(); }       // Fiber number.
+        const uint8_t  getCrateNo()     { return head.getCrateNo(); }       // Crate number.
+        const uint8_t  getSlotNo()      { return head.getSlotNo(); }        // Slot number.
+        const uint16_t  getWIBErrors()  { return head.getWIBErrors(); }     // Error bit set by the WIB. Details TBD.
+        const uint8_t getZ()            { return head.getZ(); }             // Timestamp option.
+        const uint64_t getTimestamp()   { return head.getTimestamp(); }     // Timestamp. 63 bit if Z==0, 48 bit if Z==1.
+        const uint16_t getWIBCounter()  { return head.getWIBCounter(); }    // WIB Counter, only exists when Z==1.
+        const uint32_t getCRC32()       { return head.getCRC32(); }         // Complete checksum of frame.
+        // COLDATA block accessors.
+        const uint8_t  getChecksumA(unsigned int blockNum)   { return block[blockNum].getChecksumA(); } // Odd streams. (TODO)
+        const uint8_t  getChecksumB(unsigned int blockNum)   { return block[blockNum].getChecksumB(); } // Even streams. (TODO)
+        const uint8_t  getAErr(unsigned int blockNum)        { return block[blockNum].getAErr(); }      // Odd streams. (TODO)
+        const uint8_t  getBErr(unsigned int blockNum)        { return block[blockNum].getBErr(); }      // Even streams. (TODO)
+        const uint16_t getCOLDATA(unsigned int blockNum, unsigned int stream, unsigned int channel)  { return block[blockNum].getCOLDATA(stream, channel); }
+        // Struct accessors.
+        const WIB_header_1_0_0 getWIBHeader() { return head; }
+        const COLDATA_block_1_0_0 getCOLDATABlock(unsigned int blockNum) { return block[blockNum]; }
+        
+        // Header/footer mutators.
+        void setK28_5(uint8_t newK28_5)             { head.setK28_5(newK28_5); }
+        void setVersion(uint8_t newVersion)         { head.setVersion(newVersion); }
+        void setFiberNo(uint8_t newFiberNo)         { head.setFiberNo(newFiberNo); }
+        void setCrateNo(uint8_t newCrateNo)         { head.setCrateNo(newCrateNo); }
+        void setSlotNo(uint8_t newSlotNo)           { head.setSlotNo(newSlotNo); }
+        void setWIBErrors(uint16_t newWIBErrors)    { head.setWIBErrors(newWIBErrors); }
+        void setZ(uint8_t newZ)                     { head.setZ(newZ); }
+        void setTimestamp(uint64_t newTimestamp)    { head.setTimestamp(newTimestamp); }
+        void setWIBCounter(uint16_t newWIBCounter)  { head.setWIBCounter(newWIBCounter); }
+        void setCRC32(uint32_t newCRC32)            { head.setCRC32(newCRC32); }
+        // COLDATA block mutators.
+        void setChecksumA(unsigned int blockNum, uint16_t newChecksumA) { block[blockNum].setChecksumA(newChecksumA); }
+        void setChecksumB(unsigned int blockNum, uint16_t newChecksumB) { block[blockNum].setChecksumB(newChecksumB); }
+        void setAErr(unsigned int blockNum, uint8_t newAErr)            { block[blockNum].setAErr(newAErr); }
+        void setBErr(unsigned int blockNum, uint8_t newBErr)            { block[blockNum].setBErr(newBErr); }
+        void setCOLDATA(unsigned int blockNum, unsigned int stream, unsigned int channel, uint16_t newCOLDATA) { block[blockNum].setCOLDATA(stream, channel, newCOLDATA); }
+        // Struct mutators.
+        void setWIBHeader(WIB_header_1_0_0 newWIBHeader) { head = newWIBHeader; }
+        void setCOLDATABlock(unsigned int blockNum, COLDATA_block_1_0_0 newCOLDATABlock) { block[blockNum] = newCOLDATABlock; }
         
         bool load(std::string filename, int frameNum = 0);
         void load(std::ifstream& strm, int frameNum = 0);
