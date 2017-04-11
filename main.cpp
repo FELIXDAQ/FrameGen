@@ -40,22 +40,20 @@ int main(int argc, char* argv[]) {
     framegen::compressFile("test.txt");
     framegen::decompressFile("test.txt.comp");
 
-    // Create a frame, fill it with the 21st frame of a file and then print it to another file.
+    // Create a frame, fill it with another file, edit the contents and then print it to another file.
     framegen::Frame Fr;
-    Fr.load("exampleframes/thousand.frame", 20);
-    Fr.setCRC32(Fr.CRC32());
-    Fr.print("exampleframes/printed.frame", 'h'); // The 'h' option prints the frame in hexadecimal notation. (No check on this yet.)
+    for(int i=0; i<20; i++) {
+        Fr.load("exampleframes/thousand.frame", 20+i);
+        Fr.setCOLDATA(i%4, i%8, (i+3)%8, i); // Set the ((1+3)%8)th channel of the (i%8)th stream of the (i%4)th block to i.
+        Fr.resetChecksums();
+        Fr.print("exampleframes/printed.frame", 'h'); // The 'h' option prints the frame in hexadecimal notation. (No automatic check on this yet.)
+    }
     
     // Extract and set the WIB header and a COLDATA block.
     framegen::WIB_header head(Fr.getWIBHeader());
     framegen::COLDATA_block block(Fr.getCOLDATABlock(2));
     Fr.setWIBHeader(head);
     Fr.setCOLDATABlock(1, block);
-    
-    // Create a frame with the 1.0 structure.
-    framegen::Frame_1_0_0 Fr2;
-    Fr2.setZ(1);
-    //Fr2.print("exampleframes/new.frame"); // No printing functionality yet.
     
     return 0;
 }
