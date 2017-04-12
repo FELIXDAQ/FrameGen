@@ -167,7 +167,7 @@ namespace framegen {
         _frame.resetChecksums();
         
         // Increment the number of frames.
-        numberOfFrames++;
+	//        numberOfFramesGlobal++;
     }
     
     // Main generator function: builds frames and calls the fill function.

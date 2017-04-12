@@ -25,25 +25,25 @@
 
 namespace framegen {
     
-    static uint64_t numberOfFrames = 0;
+  //  static uint64_t numberOfFramesGlobal = 0;
     
-    // TO DO: Convert to uint64_t-compatible version.
-    const uint32_t getBitRange(const uint32_t& word, int begin, int end) {
-        if(begin==0 && end==31)
-            return word;
-        else
-            return (word>>begin)&((1<<(end-begin+1))-1);
-    };
+  // TO DO: Convert to uint64_t-compatible version.
+  const uint32_t getBitRange(const uint32_t& word, int begin, int end) {
+    if(begin==0 && end==31)
+      return word;
+    else
+      return (word>>begin)&((1<<(end-begin+1))-1);
+  }
     
-    template <typename T>
-    void setBitRange(uint32_t& word, const T& newValue, int begin, int end) {
-        if(begin==0 && end==31) {
-            word = newValue;
-            return;
-        }
-        uint32_t mask = (1<<(end-begin+1))-1;
-        word = (word&~(mask<<begin)) | ((newValue&mask)<<begin);
-    };
+  template <typename T>
+  void setBitRange(uint32_t& word, const T& newValue, int begin, int end) {
+    if(begin==0 && end==31) {
+      word = newValue;
+      return;
+    }
+    uint32_t mask = (1<<(end-begin+1))-1;
+    word = (word&~(mask<<begin)) | ((newValue&mask)<<begin);
+  }
     
     struct WIB_header {
         // Header/footer accessors.

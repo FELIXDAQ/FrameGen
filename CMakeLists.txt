@@ -1,49 +1,66 @@
-cmake_minimum_required(VERSION 2.8.11)
-
-# Leave following 4 lines at the top of this file if you only want out-of-source builds.
-if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
-  file(REMOVE CMakeCache.txt)
-  message(FATAL_ERROR "Do not build in-source. Please remove CMakeCache.txt and the CMakeFiles/ directory. Then build out-of-source.")
-endif()
-
-project (libframegen)
-set(VERSION "0.1.0")
-
-
-## Check Dependencies ##
-find_package( ZLIB REQUIRED 1.2.11 REQUIRED)
-if ( NOT ZLIB_FOUND )
-    message (FATAL_ERROR "Fatal error: ZLIB (version >= 1.2.11) required.\n")
-endif( NOT ZLIB_FOUND )
+# ======================================================================
+#  kevlar main build file
+#
+#  cd .../path/to/build/directory
+#  source .../path/to/FrameGen/ups/setup_for_development <-d|-p>
+#  cmake [-DCMAKE_INSTALL_PREFIX=/install/path]
+#        -DCMAKE_BUILD_TYPE=$CETPKG_TYPE
+#        $CETPKG_SOURCE
+#  make
+#  make test
+#  make install
+#  make package (builds distribution tarfile)
+# ======================================================================
 
 
-## COMPILER SETUP ##
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -std=c++11 -Wall -g")
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.8)
-    message(INFO "${CMAKE_CXX_COMPILER_VERSION}")
-    message(FATAL_ERROR "GCC version must be at least 4.8!")
-  endif()
-elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -opt-prefetch -unroll-aggressive -march=native -mtune=native")
-endif()
+# use cmake 2.8 or later
+cmake_minimum_required (VERSION 2.8)
+
+project(FrameGen)
+
+# cetbuildtools contains our cmake modules
+SET ( CETBUILDTOOLS_VERSION $ENV{CETBUILDTOOLS_VERSION} )
+IF (NOT CETBUILDTOOLS_VERSION)
+    MESSAGE (FATAL_ERROR "ERROR: setup cetbuildtools to get the cmake modules")
+ENDIF()
+
+set(CMAKE_MODULE_PATH $ENV{ART_DIR}/Modules
+		      $ENV{CETBUILDTOOLS_DIR}/Modules
+		      ${CMAKE_MODULE_PATH})
+
+include(CetCMakeEnv)
+cet_cmake_env()
+
+cet_set_compiler_flags(DIAGS CAUTIOUS
+  WERROR
+  NO_UNDEFINED
+  EXTRA_FLAGS -pedantic -Wno-unused-local-typedefs
+)
+
+cet_report_compiler_flags()
+
+# these are minimum required versions, not the actual product versions
+find_ups_product( lardataobj v1_00_00 )
+find_ups_product( larsim v1_00_00 )
+#find_ups_product( art v1_08_00 )
+find_ups_product( cetbuildtools v4_14_01 )
+find_ups_product( boost v1_00_00 )
 
 
-## SOURCES AND TARGETS ##
-include_directories("." ${CMAKE_BINARY_DIR} ${ZLIB_INCLUDE_DIRS})
 
-file(GLOB FRAMEGEN_SOURCES FrameGen.cpp)
+# macros for dictionary and simple_plugin
+include(ArtDictionary)
+include(ArtMake)
+include(BuildPlugins)
 
-add_library(framegen SHARED ${FRAMEGEN_SOURCES})
-target_link_libraries(framegen ${ZLIB_LIBRARIES})
+# ADD SOURCE CODE SUBDIRECTORIES HERE
+add_subdirectory(FrameGen)
 
-add_executable(framegen-test main.cpp)
-target_link_libraries(framegen-test framegen ${ZLIB_LIBRARIES})
+# tests
+add_subdirectory(tests)
 
-## INSTALLATION ##
-install(TARGETS framegen
-		RUNTIME DESTINATION bin
-		LIBRARY DESTINATION lib
-		ARCHIVE DESTINATION lib)
-install(FILES FrameGen.hpp DESTINATION include)
+# ups - table and config files
+add_subdirectory(ups)
+
+# packaging utility
+include(UseCPack)
