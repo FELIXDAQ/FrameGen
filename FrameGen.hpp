@@ -158,8 +158,15 @@ namespace framegen {
         COLDATA_block block[4];
         uint32_t* _binaryData[FRAME_LENGTH]; // Pointers to all data of a single frame for easy access.
     public:
-        // Frame constructor links the binary data from the header and block structs.
-        Frame() {
+        // Frame (copy) constructor links the binary data from the header and block structs.
+        Frame() { init(); }
+        Frame(const Frame& other) {
+            head = other.head;
+            for(int i=0; i<4; i++)
+                block[i] = other.block[i];
+            init();
+        }
+        void init() {
             for(int i=0; i<4; i++)
                 _binaryData[i] = &head._binaryData[i];
             _binaryData[FRAME_LENGTH-1] = &head._binaryData[4];
@@ -169,13 +176,13 @@ namespace framegen {
         }
         
         // Header/footer accessors.
-        const uint8_t  getK28_5()        { return head.getK28_5(); }         // K28.5 only for RCE, undefined for FELIX.
-        const uint8_t  getVersion()      { return head.getVersion(); }       // Version number.
+        const uint8_t  getK28_5()       { return head.getK28_5(); }         // K28.5 only for RCE, undefined for FELIX.
+        const uint8_t  getVersion()     { return head.getVersion(); }       // Version number.
         const uint8_t  getFiberNo()     { return head.getFiberNo(); }       // Fiber number.
         const uint8_t  getCrateNo()     { return head.getCrateNo(); }       // Crate number.
         const uint8_t  getSlotNo()      { return head.getSlotNo(); }        // Slot number.
-        const uint16_t getWIBErrors()  { return head.getWIBErrors(); }     // Error bit set by the WIB. Details TBD.
-        const uint8_t getZ()            { return head.getZ(); }             // Timestamp option.
+        const uint16_t getWIBErrors()   { return head.getWIBErrors(); }     // Error bit set by the WIB. Details TBD.
+        const uint8_t  getZ()           { return head.getZ(); }             // Timestamp option.
         const uint64_t getTimestamp()   { return head.getTimestamp(); }     // Timestamp. 63 bit if Z==0, 48 bit if Z==1.
         const uint16_t getWIBCounter()  { return head.getWIBCounter(); }    // WIB Counter, only exists when Z==1.
         const uint32_t getCRC32()       { return head.getCRC32(); }         // Complete checksum of frame.

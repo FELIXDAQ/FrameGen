@@ -42,18 +42,49 @@ int main(int argc, char* argv[]) {
 
     // Create a frame, fill it with another file, edit the contents and then print it to another file.
     framegen::Frame Fr;
-    for(int i=0; i<20; i++) {
-        Fr.load("exampleframes/thousand.frame", 20+i);
-        Fr.setCOLDATA(i%4, i%8, (i+3)%8, i); // Set the ((1+3)%8)th channel of the (i%8)th stream of the (i%4)th block to i.
-        Fr.resetChecksums();
-        Fr.print("exampleframes/printed.frame", 'h'); // The 'h' option prints the frame in hexadecimal notation. (No automatic check on this yet.)
+    Fr.load("exampleframes/thousand.frame", 20);
+    for(int i=0; i<256; i++) {
+        Fr.setCOLDATA(i/64, (i%64)/8, (i%64)%8, i);
     }
+    Fr.resetChecksums();
+    Fr.print("exampleframes/printed.frame", 'h'); // The 'h' option prints the frame in hexadecimal notation. (No automatic check on this yet.)
     
     // Extract and set the WIB header and a COLDATA block.
     framegen::WIB_header head(Fr.getWIBHeader());
     framegen::COLDATA_block block(Fr.getCOLDATABlock(2));
     Fr.setWIBHeader(head);
     Fr.setCOLDATABlock(1, block);
+    
+    // Test to generate and print a matrix of frames.
+    framegen::Frame frame;
+    std::vector<framegen::Frame> frameV;
+    for(int i=0; i<100; i++)
+        frameV.push_back(frame);
+    std::vector<std::vector<framegen::Frame>> frameM;
+    for(int i=0; i<10; i++)
+        frameM.push_back(frameV);
+    
+    int framenum = 0;
+    for(int i=0; i<1000*256; i++) {
+        frameM[framenum/100][framenum%100].setCOLDATA((i/64)%4, (i/8)%8, i%8, i);
+        
+        if((i+1)%256==0) {
+            frameM[framenum/100][framenum%100].setK28_5(0);
+            frameM[framenum/100][framenum%100].setVersion(2);
+            frameM[framenum/100][framenum%100].setFiberNo(i%8);
+            frameM[framenum/100][framenum%100].setCrateNo(i%(512*5));
+            frameM[framenum/100][framenum%100].setSlotNo(i/512);
+            frameM[framenum/100][framenum%100].setZ(0);
+            frameM[framenum/100][framenum%100].setTimestamp(i*500);
+            frameM[framenum/100][framenum%100].setWIBCounter(i/512);
+            
+            frameM[framenum/100][framenum%100].resetChecksums();
+            std::string filename = "exampleframes/range/test" + std::to_string(i/256) + ".frame";
+            frameM[framenum/100][framenum%100].print(filename,'h');
+            
+            framenum++;
+        }
+    }
     
     return 0;
 }
