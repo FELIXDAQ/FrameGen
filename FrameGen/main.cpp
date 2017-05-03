@@ -6,6 +6,9 @@
 int main(int argc, char* argv[]) {
     
     // Take a command line argument if available and make a frame generator with the entered noise level (0-2^16).
+
+  /*
+
     framegen::FrameGen* F1;
     if(argc>1)
         F1 = new framegen::FrameGen(atoi(argv[1]));
@@ -40,20 +43,25 @@ int main(int argc, char* argv[]) {
     framegen::compressFile("test.txt");
     framegen::decompressFile("test.txt.comp");
 
+  */
+
     // Create a frame, fill it with another file, edit the contents and then print it to another file.
     framegen::Frame Fr;
-    for(int i=0; i<20; i++) {
-        Fr.load("exampleframes/thousand.frame", 20+i);
-        Fr.setCOLDATA(i%4, i%8, (i+3)%8, i); // Set the ((1+3)%8)th channel of the (i%8)th stream of the (i%4)th block to i.
-        Fr.resetChecksums();
-        Fr.print("exampleframes/printed.frame", 'h'); // The 'h' option prints the frame in hexadecimal notation. (No automatic check on this yet.)
-    }
+    //    for(int i=0; i<20; i++) {
+    //        Fr.load("exampleframes/thousand.frame", 20+i);
+    Fr.load("./run2/WIBFrameFile-Run_1-SubRun_0-Event_1-Plane_2-Tick_1964-Frame_11.dat",0);
+      //        Fr.setCOLDATA(i%4, i%8, (i+3)%8, i); // Set the ((1+3)%8)th channel of the (i%8)th stream of the (i%4)th block to i.
+      //        Fr.resetChecksums();
+    Fr.print("./run2/printed.frame", 'b'); // The 'h' option prints the frame in hexadecimal notation. (No automatic check on this yet.)
+	//    }
     
     // Extract and set the WIB header and a COLDATA block.
     framegen::WIB_header head(Fr.getWIBHeader());
     framegen::COLDATA_block block(Fr.getCOLDATABlock(2));
-    Fr.setWIBHeader(head);
-    Fr.setCOLDATABlock(1, block);
+    //    Fr.setWIBHeader(head);
+    //    Fr.setCOLDATABlock(1, block);
     
+    std::cout << "Just read one Frame file." << std::endl;
+
     return 0;
 }
