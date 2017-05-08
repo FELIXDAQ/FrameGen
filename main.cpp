@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
             
             frameM[framenum/100][framenum%100].resetChecksums();
             std::string filename = "exampleframes/range/test" + std::to_string(i/256) + ".frame";
-            frameM[framenum/100][framenum%100].print(filename,'h');
+            frameM[framenum/100][framenum%100].print(filename,'b');
             
             framenum++;
         }
