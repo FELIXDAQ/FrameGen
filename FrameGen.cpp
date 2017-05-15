@@ -158,6 +158,9 @@ namespace framegen {
 
             for(int j=0; j<8; j++)
                 _frame.setSErr(i,j,_randDouble(_mt)<_errProb);
+            
+            _frame.setAErr(i,_randDouble(_mt)<_errProb);
+            _frame.setBErr(i,_randDouble(_mt)<_errProb);
         }
         
         // Clear reserved space.
@@ -387,7 +390,7 @@ namespace framegen {
                 // Add a header if this is the first frame. Otherwise adjust the cursor accordingly.
                 if(strm.tellp()==0)
                     strm << "#ifndef PROTODUNE_H__\n#define PROTODUNE_H__\n\n"
-                    << "const uint32_t PROTODUNE_FRAMESIZE = 116*4;\n"
+                    << "const uint32_t PROTODUNE_FRAMESIZE = 117*4;\n"
                     << "const uint32_t PROTODUNE_FRAMENUM = " << Nframes << ";\n\n"
                     << "uint32_t PROTODUNE_DATA[] = {";
                 else {

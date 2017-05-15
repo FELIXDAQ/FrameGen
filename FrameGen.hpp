@@ -107,7 +107,7 @@ namespace framegen {
                 case 5:
                     return getBitRange(_binaryData[4+stream*3+1],28,31) | getBitRange(_binaryData[4+stream*3+2],0,7)<<4;
                 default:
-                    return getBitRange(_binaryData[4+stream*3+channel*12/32],(channel*12)%32,(channel*12)%32);
+                    return getBitRange(_binaryData[4+stream*3+channel*12/32],(channel*12)%32,((channel+1)*12-1)%32);
             }
         }
         
