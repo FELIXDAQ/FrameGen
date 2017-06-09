@@ -35,8 +35,8 @@ namespace framegen {
             return (word>>begin)&((1<<(end-begin+1))-1);
     };
     
-    template <typename T>
-    void setBitRange(uint32_t& word, const T& newValue, int begin, int end) {
+    template <typename W, typename T>
+    void setBitRange(W& word, const T& newValue, int begin, int end) {
         if(begin==0 && end==31) {
             word = newValue;
             return;
@@ -110,6 +110,7 @@ namespace framegen {
                     return getBitRange(_binaryData[4+stream*3+channel*12/32],(channel*12)%32,((channel+1)*12-1)%32);
             }
         }
+        const uint16_t getCOLDATA(unsigned int channel) { return getCOLDATA(channel/8, channel%8); }
         
         // COLDATA block mutators.
         void setChecksumA(uint16_t newChecksumA) {
@@ -149,6 +150,7 @@ namespace framegen {
                     break;
             }
         }
+        void setCOLDATA(unsigned int channel, uint16_t newCOLDATA) { setCOLDATA(channel/8, channel%8, newCOLDATA); }
     };
     
     class Frame {
@@ -193,6 +195,7 @@ namespace framegen {
         const uint8_t  getBErr(unsigned int blockNum)        { return block[blockNum].getBErr(); }      // Even streams. (TODO)
         const uint8_t  getSErr(unsigned int blockNum, unsigned int stream)                          { return block[blockNum].getSErr(stream); }
         const uint16_t getCOLDATA(unsigned int blockNum, unsigned int stream, unsigned int channel) { return block[blockNum].getCOLDATA(stream, channel); }
+        const uint16_t getCOLDATA(unsigned int channel) { return block[channel/64].getCOLDATA(channel%64); }
         // Struct accessors.
         const WIB_header getWIBHeader() { return head; }
         const COLDATA_block getCOLDATABlock(unsigned int blockNum) { return block[blockNum]; }
@@ -215,6 +218,7 @@ namespace framegen {
         void setBErr(unsigned int blockNum, uint8_t newBErr)            { block[blockNum].setBErr(newBErr); }
         void setSErr(unsigned int blockNum, unsigned int stream, uint8_t newSErr)                               { block[blockNum].setSErr(stream, newSErr); }
         void setCOLDATA(unsigned int blockNum, unsigned int stream, unsigned int channel, uint16_t newCOLDATA)  { block[blockNum].setCOLDATA(stream, channel, newCOLDATA); }
+        void setCOLDATA(unsigned int channel, uint16_t newCOLDATA) { block[channel/64].setCOLDATA(channel%64, newCOLDATA); }
         // Struct mutators.
         void setWIBHeader(WIB_header newWIBHeader) { head = newWIBHeader; }
         void setCOLDATABlock(unsigned int blockNum, COLDATA_block newCOLDATABlock) { block[blockNum] = newCOLDATABlock; }
