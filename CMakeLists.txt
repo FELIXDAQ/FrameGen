@@ -33,12 +33,12 @@ endif()
 ## SOURCES AND TARGETS ##
 include_directories("." ${CMAKE_BINARY_DIR} ${ZLIB_INCLUDE_DIRS})
 
-file(GLOB FRAMEGEN_SOURCES FrameGen.cpp)
+file(GLOB FRAMEGEN_SOURCES src/FrameGen.cpp)
 
 add_library(framegen SHARED ${FRAMEGEN_SOURCES})
 target_link_libraries(framegen ${ZLIB_LIBRARIES})
 
-add_executable(framegen-test main.cpp)
+add_executable(framegen-test src/framegen-test.cpp)
 target_link_libraries(framegen-test framegen ${ZLIB_LIBRARIES})
 
 ## INSTALLATION ##
@@ -46,4 +46,4 @@ install(TARGETS framegen
 		RUNTIME DESTINATION bin
 		LIBRARY DESTINATION lib
 		ARCHIVE DESTINATION lib)
-install(FILES FrameGen.hpp DESTINATION include)
+install(FILES src/FrameGen.hpp DESTINATION include)

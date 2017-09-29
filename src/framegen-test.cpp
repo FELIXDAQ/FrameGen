@@ -1,10 +1,10 @@
 // This is an example program that showcases the various uses of FrameGen.
 
 #include <iostream>
+#include <vector>
 #include "FrameGen.hpp"
 
 int main(int argc, char* argv[]) {
-    
     // Take a command line argument if available and make a frame generator with the entered noise level (0-2^16).
     framegen::FrameGen* F1;
     if(argc>1)
@@ -37,23 +37,20 @@ int main(int argc, char* argv[]) {
 
     // Compress a file and then decompress it again.
     // Since the old files are removed immediately, these two lines effectively do nothing. Comment out the decompression to view a compressed file.
-    framegen::compressFile("test.txt");
-    framegen::decompressFile("test.txt.comp");
+    std::ofstream ofile("exampleframes/test.txt");
+    ofile << "This is a test to see whether compression really works.";
+    ofile.close();
+    framegen::compressFile("exampleframes/test.txt");
+    framegen::decompressFile("exampleframes/test.txt.comp");
 
     // Create a frame, fill it with another file, edit the contents and then print it to another file.
     framegen::Frame Fr;
     Fr.load("exampleframes/thousand.frame", 20);
     for(int i=0; i<256; i++) {
-        Fr.setCOLDATA(i/64, (i%64)/8, (i%64)%8, i);
+        Fr.set_channel(i/64, (i%64)/8, (i%64)%8, i);
     }
     Fr.resetChecksums();
     Fr.print("exampleframes/printed.frame", 'h'); // The 'h' option prints the frame in hexadecimal notation. (No automatic check on this yet.)
-    
-    // Extract and set the WIB header and a COLDATA block.
-    framegen::WIB_header head(Fr.getWIBHeader());
-    framegen::COLDATA_block block(Fr.getCOLDATABlock(2));
-    Fr.setWIBHeader(head);
-    Fr.setCOLDATABlock(1, block);
     
     // Test to generate and print a matrix of frames.
     framegen::Frame frame;
@@ -66,17 +63,17 @@ int main(int argc, char* argv[]) {
     
     int framenum = 0;
     for(int i=0; i<1000*256; i++) {
-        frameM[framenum/100][framenum%100].setCOLDATA((i/64)%4, (i/8)%8, i%8, i);
+        frameM[framenum/100][framenum%100].set_channel((i/64)%4, (i/8)%8, i%8, i);
         
         if((i+1)%256==0) {
-            frameM[framenum/100][framenum%100].setK28_5(0);
-            frameM[framenum/100][framenum%100].setVersion(2);
-            frameM[framenum/100][framenum%100].setFiberNo(i%8);
-            frameM[framenum/100][framenum%100].setCrateNo(i%(512*5));
-            frameM[framenum/100][framenum%100].setSlotNo(i/512);
-            frameM[framenum/100][framenum%100].setZ(0);
-            frameM[framenum/100][framenum%100].setTimestamp(i*500);
-            frameM[framenum/100][framenum%100].setWIBCounter(i/512);
+            frameM[framenum/100][framenum%100].set_sof(0);
+            frameM[framenum/100][framenum%100].set_version(2);
+            frameM[framenum/100][framenum%100].set_fiber_no(i%8);
+            frameM[framenum/100][framenum%100].set_crate_no(i%(512*5));
+            frameM[framenum/100][framenum%100].set_slot_no(i/512);
+            frameM[framenum/100][framenum%100].set_z(0);
+            frameM[framenum/100][framenum%100].set_timestamp(i*500);
+            frameM[framenum/100][framenum%100].set_wib_counter(i/512);
             
             frameM[framenum/100][framenum%100].resetChecksums();
             std::string filename = "exampleframes/range/test" + std::to_string(i/256) + ".frame";
@@ -85,6 +82,16 @@ int main(int argc, char* argv[]) {
             framenum++;
         }
     }
+
+    // Test to check whether COLDATA writing and reading correspond.
+    framegen::Frame colFrame;
+    for(unsigned i=0; i<256; i++)
+        colFrame.set_channel(i, 255-i);
+
+    for(unsigned i=0; i<256; i++)
+        std::cout << colFrame.channel(i) << std::endl;
+
+    colFrame.print("testframe");
     
     return 0;
 }

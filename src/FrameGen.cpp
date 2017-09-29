@@ -21,7 +21,7 @@ namespace framegen {
             return false;
         }
         ifile.seekg(0,std::ios_base::end);
-        if(ifile.tellg()<(frameNum+1)*(FRAME_LENGTH*4)) {
+        if(ifile.tellg()<(frameNum+1)*num_frame_bytes) {
             std::cout << "Error (Frame::load): file " << filename << " contains fewer than " << frameNum+1 << " frames." << std::endl << "Be sure to start counting at 0." << std::endl;
             return false;
         }
@@ -33,29 +33,34 @@ namespace framegen {
     }
     
     void Frame::load(std::ifstream& strm, int frameNum) {
-        strm.seekg(frameNum*FRAME_LENGTH*4);
-        for(int i=0; i<FRAME_LENGTH; i++)
-            *_binaryData[i] = (uint32_t)strm.get() | strm.get()<<8 | strm.get()<<16 | strm.get()<<24;
+        strm.seekg(frameNum*num_frame_bytes);
+        for(int i=0; i<num_frame_words; i++)
+            _binaryData[i] = (uint32_t)strm.get() | strm.get()<<8 | strm.get()<<16 | strm.get()<<24;
+    }
+    
+    void Frame::load(uint8_t* begin) {
+        for(int i=0; i<num_frame_bytes; i+=4)
+            _binaryData[i] = (uint32_t)*(begin+i) | *(begin+i+1)<<8 | *(begin+i+2)<<16 | *(begin+i+3)<<24;
     }
     
     void Frame::resetChecksums() {
         for(unsigned int i=0; i<4; i++) {
-            setChecksumA(i,checksum_A(i));
-            setChecksumB(i,checksum_B(i));
+            _frame->block[i].head.set_checksum_a(calculate_checksum_a(i));
+            _frame->block[i].head.set_checksum_b(calculate_checksum_b(i));
         }
-        setCRC32(zCRC32());
+        _frame->CRC32 = calculate_zCRC32();
     }
     
     void Frame::clearReserved() {
-        setBitRange(*_binaryData[0],0,24,31);
-        setBitRange(*_binaryData[1],0,0,15);
+        setBitRange(_binaryData[0],0,24,31);
+        setBitRange(_binaryData[1],0,0,15);
         for(int i=0; i<4; i++)
             for(int j=0; j<4; j++)
-                setBitRange(*_binaryData[4+i*28+j],0,8,15);
+                setBitRange(_binaryData[4+i*28+j],0,8,15);
     }
     
     // Longitudinal redundancy check (16-bit).
-    uint16_t Frame::checksum_A(unsigned int blockNum, uint16_t init) {
+    uint16_t Frame::calculate_checksum_a(unsigned int blockNum, uint16_t init) {
         if(blockNum>3) {
             std::cout << "Error: invalid block number passed to checksum_A(). (Valid range: 0-3.)" << std::endl;
             return 0;
@@ -63,15 +68,15 @@ namespace framegen {
         uint16_t result = init;
         for(unsigned int i=0; i<4; i++) {
             for(unsigned int j=0; j<3; j++) {
-                result ^= getBitRange(*_binaryData[8+blockNum*28+i*2*3+j],0,15);
-                result ^= getBitRange(*_binaryData[8+blockNum*28+i*2*3+j],16,31);
+                result ^= getBitRange(_binaryData[8+blockNum*28+i*2*3+j],0,15);
+                result ^= getBitRange(_binaryData[8+blockNum*28+i*2*3+j],16,31);
             }
         }
         return result;
     }
     
     // Modular checksum (16-bit).
-    uint16_t Frame::checksum_B(unsigned int blockNum, uint16_t init) {
+    uint16_t Frame::calculate_checksum_b(unsigned int blockNum, uint16_t init) {
         if(blockNum>3) {
             std::cout << "Error: invalid block number passed to checksum_B(). (Valid range: 0-3.)" << std::endl;
             return 0;
@@ -79,37 +84,37 @@ namespace framegen {
         uint16_t result = init;
         for(unsigned int i=0; i<4; i++) {
             for(unsigned int j=0; j<3; j++) {
-                result += getBitRange(*_binaryData[8+blockNum*28+(i*2+1)*3+j],0,15);
-                result += getBitRange(*_binaryData[8+blockNum*28+(i*2+1)*3+j],16,31);
+                result += getBitRange(_binaryData[8+blockNum*28+(i*2+1)*3+j],0,15);
+                result += getBitRange(_binaryData[8+blockNum*28+(i*2+1)*3+j],16,31);
             }
         }
         return -result;
     }
     
     // Cyclic redundancy check (32-bit).
-    uint32_t Frame::CRC32(uint32_t padding, uint32_t CRC32_Polynomial) {
-        uint32_t shiftReg = *_binaryData[0]; // Shifting register.
+    uint32_t Frame::calculate_CRC32(uint32_t padding, uint32_t CRC32_Polynomial) {
+        uint32_t shiftReg = _binaryData[0]; // Shifting register.
         if(shiftReg&1)
             shiftReg ^= CRC32_Polynomial;
         // Shift through the data.
-        for(int i=0; i<(FRAME_LENGTH-2)*32; i++) { // The register shifts through FRAME_LENGTH-1 32-bit words and is 32 bits long.
+        for(int i=0; i<(num_frame_words-2)*32; i++) { // The register shifts through FRAME_LENGTH-1 32-bit words and is 32 bits long.
             // Perform XOR on the shifting register if the leading bit is 1 and shift.
             if(shiftReg & 1) {
-                shiftReg = shiftReg>>1 | (*_binaryData[i/32+1]>>(i%32)&1)<<31;
+                shiftReg = shiftReg>>1 | (_binaryData[i/32+1]>>(i%32)&1)<<31;
                 shiftReg ^= CRC32_Polynomial;
             } else
-                shiftReg = shiftReg>>1 | (*_binaryData[i/32+1]>>(i%32)&1)<<31;
+                shiftReg = shiftReg>>1 | (_binaryData[i/32+1]>>(i%32)&1)<<31;
         }
         
         return shiftReg^padding;
     }
     
     // Zlib's cyclic redundancy check (32-bit).
-    uint32_t Frame::zCRC32(uint32_t padding) {
+    uint32_t Frame::calculate_zCRC32(uint32_t padding) {
         uint32_t crc = crc32(0L, Z_NULL, 0);
         uint8_t* p;
-        for(int i=0; i<115; i++) {
-            p = (uint8_t*)_binaryData[i];
+        for(int i=0; i<num_frame_words-2; i++) {
+            p = (uint8_t*)&_binaryData[i];
             for(int j=0; j<4; j++)
                 crc = crc32(crc, p++, 1);
         }
@@ -127,20 +132,20 @@ namespace framegen {
     //==========
     void FrameGen::fill() {
         // Header.
-        _frame.setK28_5(0);
-        _frame.setVersion(1); // Version notation format subject to change.
-        _frame.setFiberNo(rand()%8);
-        _frame.setCrateNo(rand()%32);
-        _frame.setSlotNo(rand()%8);
+        _frame.set_sof(0);
+        _frame.set_version(1); // Version notation format subject to change.
+        _frame.set_fiber_no(rand()%8);
+        _frame.set_crate_no(rand()%32);
+        _frame.set_slot_no(rand()%8);
         
-        _frame.setWIBErrors(_randDouble(_mt)<_errProb);
+        _frame.set_wib_errors(_randDouble(_mt)<_errProb);
         
-        _frame.setZ(0);
+        _frame.set_z(0);
         
         { // Small timestamp scope.
             using namespace std::chrono;
             static nanoseconds time = duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch());
-            _frame.setTimestamp(duration_cast<nanoseconds>(time).count());
+            _frame.set_timestamp(duration_cast<nanoseconds>(time).count());
             time += nanoseconds(500);
         }
 
@@ -153,14 +158,13 @@ namespace framegen {
                 do {
                     randnum = _randInt(_mt)-_noiseAmplitude+_noisePedestal;
                 } while(randnum<0);
-                _frame.setCOLDATA(i,j/8,j%8,randnum);
+                _frame.set_channel(i,j/8,j%8,randnum);
             }
 
-            for(int j=0; j<8; j++)
-                _frame.setSErr(i,j,_randDouble(_mt)<_errProb);
-            
-            _frame.setAErr(i,_randDouble(_mt)<_errProb);
-            _frame.setBErr(i,_randDouble(_mt)<_errProb);
+            _frame.set_s1_error(i, _randDouble(_mt) < _errProb);
+            _frame.set_s2_error(i, _randDouble(_mt) < _errProb);
+
+            // The Coldata convert count and error register are not set of yet.
         }
         
         // Clear reserved space.
@@ -168,9 +172,6 @@ namespace framegen {
 
         // Set the individual COLDATA checksums and the CRC32 over the entire frame.
         _frame.resetChecksums();
-        
-        // Increment the number of frames.
-        numberOfFrames++;
     }
     
     // Main generator function: builds frames and calls the fill function.
@@ -280,28 +281,30 @@ namespace framegen {
         
         // Check checksums.
         for(int i=0; i<4; i++) {
-            if(frame.checksum_A(i, frame.getChecksumA(i)))
+            if(frame.calculate_checksum_a(i, frame.checksum_a(i)))
                 std::cout << "Frame " << filename << ", COLDATA block " << i+1 << "/4 contains an error in checksum A." << std::endl;
-            if(frame.checksum_B(i, frame.getChecksumB(i)))
+            if(frame.calculate_checksum_b(i, frame.checksum_b(i)))
                 std::cout << "Frame " << filename << ", COLDATA block " << i+1 << "/4 contains an error in checksum B." << std::endl;
         }
-        if(frame.zCRC32(frame.getCRC32())) {
+        if(frame.calculate_zCRC32(frame.CRC32())) {
             std::cout << "Frame " << filename << " failed its cyclic redundancy check." << std::endl;
             return false;
         }
         
         // Check errors and produce a warning.
-        if(frame.getWIBErrors()) // WIB_Errors
+        if(frame.wib_errors()) // WIB_Errors
             std::cout << "Warning: WIB error bit set in frame " << filename << "." << std::endl;
-        for(int i=0; i<4; i++)
-            for(int j=0; j<8; j++)
-                if(frame.getSErr(i,j)) // Stream errors
-                    std::cout << "Warning: S" << j+1 << " error bit set in frame " << filename << ", block " << i+1 << "/4." << std::endl;
+        for(int i=0; i<4; i++){
+            if(frame.s1_error(i)) // Stream errors
+                std::cout << "Warning: S1 error bit set in frame " << filename << ", block " << i+1 << "/4." << std::endl;
+            if(frame.s2_error(i)) // Stream errors
+                std::cout << "Warning: S2 error bit set in frame " << filename << ", block " << i+1 << "/4." << std::endl;
+        }
         
         return true;
     }
     
-    // Function to check files within a single file.
+    // Function to check frames within a single file.
     const bool checkSingleFile(const std::string& filename) {
         // Open file.
         std::ifstream ifile(filename, std::ios::binary);
@@ -313,11 +316,11 @@ namespace framegen {
         
         // Get number of frames and check whether this is an integer.
         ifile.seekg(0,ifile.end);
-        if(ifile.tellg()%(FRAME_LENGTH*4)) {
+        if(ifile.tellg()%(num_frame_bytes)) {
             std::cout << "Error: file " << filename << " contains unreadable frames." << std::endl;
             return false;
         }
-        int numberOfFrames = ifile.tellg()/(FRAME_LENGTH*4);
+        int numberOfFrames = ifile.tellg()/(num_frame_bytes);
         ifile.seekg(0,ifile.beg);
         
         Frame frame;
@@ -330,23 +333,25 @@ namespace framegen {
             
             // Check checksums.
             for(int i=0; i<4; i++) {
-                if(frame.checksum_A(i, frame.getChecksumA(i)))
+                if(frame.calculate_checksum_a(i, frame.checksum_a(i)))
                     std::cout << "Frame " << j << " of file " << filename << ", COLDATA block " << i+1 << "/4 contains an error in checksum A." << std::endl;
-                if(frame.checksum_B(i, frame.getChecksumB(i)))
+                if(frame.calculate_checksum_b(i, frame.checksum_b(i)))
                     std::cout << "Frame " << j << " of file " << filename << ", COLDATA block " << i+1 << "/4 contains an error in checksum B." << std::endl;
             }
-            if(frame.zCRC32(frame.getCRC32())) {
+            if(frame.calculate_zCRC32(frame.CRC32())) {
                 std::cout << "Frame " << j << " of file " << filename << " failed its cyclic redundancy check." << std::endl;
                 return false;
             }
             
             // Check errors and produce a warning.
-            if(frame.getWIBErrors()) // WIB_Errors
+            if(frame.wib_errors()) // WIB_Errors
                 std::cout << "Warning: WIB error bit set in frame " << j << " of file " << filename << "." << std::endl;
-            for(int i=0; i<4; i++)
-                for(int k=0; k<8; k++)
-                    if(frame.getSErr(i,k)) // Stream errors.
-                        std::cout << "Warning: S" << k+1 << " error bit set in frame " << j << " of file " << filename << ", block " << i+1 << "/4." << std::endl;
+            for(int i=0; i<4; i++){
+                if(frame.s1_error(i)) // Stream errors
+                    std::cout << "Warning: S1 error bit set in frame " << filename << ", block " << i+1 << "/4." << std::endl;
+                if(frame.s2_error(i)) // Stream errors
+                    std::cout << "Warning: S2 error bit set in frame " << filename << ", block " << i+1 << "/4." << std::endl;
+            }
         }
         
         ifile.close();
@@ -371,20 +376,20 @@ namespace framegen {
         // b = binary, h = hexadecimal, o = octal, d = decimal, f = header file
         switch(opt) {
             case 'b':
-                for(int i=0; i<FRAME_LENGTH; i++)
-                    strm << (char)(*frame._binaryData[i]) << (char)(*frame._binaryData[i]>>8) << (char)(*frame._binaryData[i]>>16) << (char)(*frame._binaryData[i]>>24);
+                for(int i=0; i<num_frame_words; i++)
+                    strm << (char)(frame._binaryData[i]) << (char)(frame._binaryData[i]>>8) << (char)(frame._binaryData[i]>>16) << (char)(frame._binaryData[i]>>24);
                 break;
             case 'h':
-                for(int i=0; i<FRAME_LENGTH; i++)
-                    strm << std::hex << std::setfill('0') << "0x" << std::setw(8) << *frame._binaryData[i] << std::endl;
+                for(int i=0; i<num_frame_words; i++)
+                    strm << std::hex << std::setfill('0') << "0x" << std::setw(8) << frame._binaryData[i] << std::endl;
                 break;
             case 'o':
-                for(int i=0; i<FRAME_LENGTH; i++)
-                    strm << std::oct << std::setfill('0') << "0" << std::setw(11) << *frame._binaryData[i] << std::endl;
+                for(int i=0; i<num_frame_words; i++)
+                    strm << std::oct << std::setfill('0') << "0" << std::setw(11) << frame._binaryData[i] << std::endl;
                 break;
             case 'd':
-                for(int i=0; i<FRAME_LENGTH; i++)
-                    strm << std::setfill('0') << std::setw(10) << *frame._binaryData[i] << std::endl;
+                for(int i=0; i<num_frame_words; i++)
+                    strm << std::setfill('0') << std::setw(10) << frame._binaryData[i] << std::endl;
                 break;
             case 'f':
                 // Add a header if this is the first frame. Otherwise adjust the cursor accordingly.
@@ -398,9 +403,9 @@ namespace framegen {
                     strm << ",";
                 }
                 // Enter data.
-                strm << std::endl << std::hex << std::setfill('0') << "    0x" << std::setw(8) << *frame._binaryData[0];
-                for(int i=1; i<FRAME_LENGTH; i++) {
-                    strm << "," << std::endl << std::hex << std::setfill('0') << "    0x" << std::setw(8) << *frame._binaryData[i];
+                strm << std::endl << std::hex << std::setfill('0') << "    0x" << std::setw(8) << frame._binaryData[0];
+                for(int i=1; i<num_frame_words; i++) {
+                    strm << "," << std::endl << std::hex << std::setfill('0') << "    0x" << std::setw(8) << frame._binaryData[i];
                 }
                 strm << std::endl << "};\n\n#endif";
                 break;
