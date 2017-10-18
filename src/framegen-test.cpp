@@ -2,7 +2,7 @@
 
 #include <iostream>
 #include <vector>
-#include "FrameGen.hpp"
+#include "src/FrameGen.hpp"
 
 int main(int argc, char* argv[]) {
     // Take a command line argument if available and make a frame generator with the entered noise level (0-2^16).
@@ -82,16 +82,6 @@ int main(int argc, char* argv[]) {
             framenum++;
         }
     }
-
-    // Test to check whether COLDATA writing and reading correspond.
-    framegen::Frame colFrame;
-    for(unsigned i=0; i<256; i++)
-        colFrame.set_channel(i, 255-i);
-
-    for(unsigned i=0; i<256; i++)
-        std::cout << colFrame.channel(i) << std::endl;
-
-    colFrame.print("testframe");
     
     return 0;
 }

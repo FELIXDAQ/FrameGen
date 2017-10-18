@@ -9,6 +9,7 @@
 #ifndef FRAMEGEN_HPP_
 #define FRAMEGEN_HPP_
 
+#include <bitset>
 #include <chrono>
 #include <cstring>
 #include <ctime>
@@ -61,8 +62,8 @@ void setBitRange(W& word, const T& newValue, int begin, int end) {
 // ==================================================================
 struct WIBHeader {
   word_t sof : 8, version : 5, fiber_no : 3, slot_no : 5, crate_no : 3,
-      /*reserved*/ : 8;
-  word_t mm : 1, oos : 1, /*reserved*/ : 14, wib_errors : 16;
+      reserved_1 : 8;
+  word_t mm : 1, oos : 1, reserved_2 : 14, wib_errors : 16;
   word_t timestamp_1 /*:32*/;
   word_t timestamp_2 : 16, wib_counter : 15, z : 1;
 
@@ -113,10 +114,10 @@ struct WIBHeader {
 };
 
 struct ColdataHeader {
-  word_t s1_error : 4, s2_error : 4, /*reserved*/ : 8, checksum_a_1 : 8,
+  word_t s1_error : 4, s2_error : 4, reserved_1 : 8, checksum_a_1 : 8,
       checksum_b_1 : 8;
   word_t checksum_a_2 : 8, checksum_b_2 : 8, coldata_convert_count : 16;
-  word_t error_register : 16, /*reserved*/ : 16;
+  word_t error_register : 16, reserved_2 : 16;
   word_t hdr;
 
   uint16_t checksum_a() const {
@@ -247,9 +248,11 @@ class Frame {
   uint8_t version() const { return _frame->head.version; }
   uint8_t fiber_no() const { return _frame->head.fiber_no; }
   uint8_t slot_no() const { return _frame->head.slot_no; }
+  uint8_t reserved_1() const { return _frame->head.reserved_1; }
   uint8_t crate_no() const { return _frame->head.crate_no; }
   uint8_t mm() const { return _frame->head.mm; }
   uint8_t oos() const { return _frame->head.oos; }
+  uint16_t reserved_2() const { return _frame->head.reserved_2; }
   uint16_t wib_errors() const { return _frame->head.wib_errors; }
   uint64_t timestamp() const { return _frame->head.timestamp(); }
   uint16_t wib_counter() const { return _frame->head.wib_counter; }
@@ -265,11 +268,17 @@ class Frame {
   void set_slot_no(const uint8_t& newSlot_no) {
     _frame->head.slot_no = newSlot_no;
   }
+  void set_reserved_1(const uint8_t& newReserved_1) {
+    _frame->head.reserved_1 = newReserved_1;
+  }
   void set_crate_no(const uint8_t& newCrate_no) {
     _frame->head.crate_no = newCrate_no;
   }
   void set_mm(const uint8_t& newMm) { _frame->head.mm = newMm; }
   void set_oos(const uint8_t& newOos) { _frame->head.oos = newOos; }
+  void set_reserved_2(const uint8_t& newReserved_2) {
+    _frame->head.reserved_2 = newReserved_2;
+  }
   void set_wib_errors(const uint16_t& newWib_errors) {
     _frame->head.wib_errors = newWib_errors;
   }
@@ -288,6 +297,9 @@ class Frame {
   uint8_t s2_error(const uint8_t& block_num) const {
     return _frame->block[block_num].head.s2_error;
   }
+  uint8_t reserved_1(const uint8_t& block_num) const {
+    return _frame->block[block_num].head.reserved_1;
+  }
   uint16_t checksum_a(const uint8_t& block_num) const {
     return _frame->block[block_num].head.checksum_a();
   }
@@ -299,6 +311,9 @@ class Frame {
   }
   uint16_t error_register(const uint8_t& block_num) const {
     return _frame->block[block_num].head.error_register;
+  }
+  uint16_t reserved_2(const uint8_t& block_num) const {
+    return _frame->block[block_num].head.reserved_2;
   }
   uint8_t HDR(const uint8_t& block_num, const uint8_t& HDR_num) const {
     return _frame->block[block_num].head.HDR(HDR_num);
@@ -312,12 +327,20 @@ class Frame {
                    (ch % num_ch_per_block) / num_ch_per_stream,
                    ch % num_ch_per_stream);
   }
+  // This is a terrible function. Only currently in use for frame conversion.
+  word_t* adcs(const uint8_t& block_num) {
+    return &_binaryData[num_frame_hdr_words + block_num * num_COLDATA_words +
+                        num_COLDATA_hdr_words];
+  }
   // Coldata block modifiers.
   void set_s1_error(const uint8_t& block_num, const uint8_t& new_s1_error) {
     _frame->block[block_num].head.s1_error = new_s1_error;
   }
   void set_s2_error(const uint8_t& block_num, const uint8_t& new_s2_error) {
     _frame->block[block_num].head.s2_error = new_s2_error;
+  }
+  void set_reserved_1(const uint8_t& block_num, const uint8_t& new_reserved_1) {
+    _frame->block[block_num].head.reserved_1 = new_reserved_1;
   }
   void set_checksum_a(const uint8_t& block_num,
                       const uint16_t& new_checksum_a) {
@@ -336,6 +359,10 @@ class Frame {
                           const uint16_t& new_error_register) {
     _frame->block[block_num].head.error_register = new_error_register;
   }
+  void set_reserved_2(const uint8_t& block_num,
+                      const uint16_t& new_reserved_2) {
+    _frame->block[block_num].head.reserved_2 = new_reserved_2;
+  }
   void set_HDR(const uint8_t& block_num, const uint8_t& HDR_num,
                const uint16_t& new_hdr) {
     _frame->block[block_num].head.set_HDR(HDR_num, new_hdr);
@@ -344,8 +371,7 @@ class Frame {
                    const uint8_t& ch, const uint16_t& new_channel) {
     _frame->block[block_num].set_channel(adc, ch, new_channel);
   }
-  void set_channel(const uint8_t& ch,
-                   const uint16_t& new_channel) {
+  void set_channel(const uint8_t& ch, const uint16_t& new_channel) {
     set_channel(ch / num_ch_per_block,
                 (ch % num_ch_per_block) / num_ch_per_stream,
                 ch % num_ch_per_stream, new_channel);
@@ -394,7 +420,7 @@ class Frame {
                     const int Nframes);
   friend bool print(const Frame& frame, std::ofstream& strm, char opt,
                     const int Nframes);
-}; // class Frame
+};  // class Frame
 
 // Function to check whether a frame corresponds to its checksums.
 const bool check(const std::string& filename);

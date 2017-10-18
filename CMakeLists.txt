@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 2.8.11)
 
+# Remove a macOS warning.
+set(CMAKE_MACOSX_RPATH 1)
+
 # Leave following 4 lines at the top of this file if you only want out-of-source builds.
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
   file(REMOVE CMakeCache.txt)
@@ -37,6 +40,9 @@ file(GLOB FRAMEGEN_SOURCES src/FrameGen.cpp)
 
 add_library(framegen SHARED ${FRAMEGEN_SOURCES})
 target_link_libraries(framegen ${ZLIB_LIBRARIES})
+
+## Necessary directories for the test program. ##
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/exampleframes/lotsoffiles ${CMAKE_BINARY_DIR}/exampleframes/range)
 
 add_executable(framegen-test src/framegen-test.cpp)
 target_link_libraries(framegen-test framegen ${ZLIB_LIBRARIES})

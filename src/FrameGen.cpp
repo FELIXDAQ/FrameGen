@@ -6,7 +6,7 @@
 // Description : FrameGen in C++, Ansi-style
 //============================================================================
 
-#include "FrameGen.hpp"
+#include "src/FrameGen.hpp"
 
 namespace framegen {
     
@@ -34,13 +34,15 @@ namespace framegen {
     
     void Frame::load(std::ifstream& strm, int frameNum) {
         strm.seekg(frameNum*num_frame_bytes);
-        for(int i=0; i<num_frame_words; i++)
+        for(unsigned i=0; i<num_frame_words; i++)
             _binaryData[i] = (uint32_t)strm.get() | strm.get()<<8 | strm.get()<<16 | strm.get()<<24;
     }
     
     void Frame::load(uint8_t* begin) {
-        for(int i=0; i<num_frame_bytes; i+=4)
-            _binaryData[i] = (uint32_t)*(begin+i) | *(begin+i+1)<<8 | *(begin+i+2)<<16 | *(begin+i+3)<<24;
+        for(unsigned i=0; i<num_frame_words; i++) {
+            const uint32_t* begin32 = reinterpret_cast<uint32_t const*>(begin);
+            _binaryData[i] = *(begin32+i);
+        }
     }
     
     void Frame::resetChecksums() {
@@ -50,15 +52,16 @@ namespace framegen {
         }
         _frame->CRC32 = calculate_zCRC32();
     }
-    
+
     void Frame::clearReserved() {
-        setBitRange(_binaryData[0],0,24,31);
-        setBitRange(_binaryData[1],0,0,15);
-        for(int i=0; i<4; i++)
-            for(int j=0; j<4; j++)
-                setBitRange(_binaryData[4+i*28+j],0,8,15);
+      _frame->head.reserved_1 = 0;
+      _frame->head.reserved_2 = 0;
+      for (unsigned i = 0; i < 4; ++i) {
+        _frame->block[i].head.reserved_1 = 0;
+        _frame->block[i].head.reserved_2 = 0;
+      }
     }
-    
+
     // Longitudinal redundancy check (16-bit).
     uint16_t Frame::calculate_checksum_a(unsigned int blockNum, uint16_t init) {
         if(blockNum>3) {
@@ -97,7 +100,7 @@ namespace framegen {
         if(shiftReg&1)
             shiftReg ^= CRC32_Polynomial;
         // Shift through the data.
-        for(int i=0; i<(num_frame_words-2)*32; i++) { // The register shifts through FRAME_LENGTH-1 32-bit words and is 32 bits long.
+        for(unsigned i=0; i<(num_frame_words-2)*32; i++) { // The register shifts through FRAME_LENGTH-1 32-bit words and is 32 bits long.
             // Perform XOR on the shifting register if the leading bit is 1 and shift.
             if(shiftReg & 1) {
                 shiftReg = shiftReg>>1 | (_binaryData[i/32+1]>>(i%32)&1)<<31;
@@ -113,7 +116,7 @@ namespace framegen {
     uint32_t Frame::calculate_zCRC32(uint32_t padding) {
         uint32_t crc = crc32(0L, Z_NULL, 0);
         uint8_t* p;
-        for(int i=0; i<num_frame_words-2; i++) {
+        for(unsigned i=0; i<num_frame_words-2; i++) {
             p = (uint8_t*)&_binaryData[i];
             for(int j=0; j<4; j++)
                 crc = crc32(crc, p++, 1);
@@ -376,19 +379,19 @@ namespace framegen {
         // b = binary, h = hexadecimal, o = octal, d = decimal, f = header file
         switch(opt) {
             case 'b':
-                for(int i=0; i<num_frame_words; i++)
+                for(unsigned i=0; i<num_frame_words; i++)
                     strm << (char)(frame._binaryData[i]) << (char)(frame._binaryData[i]>>8) << (char)(frame._binaryData[i]>>16) << (char)(frame._binaryData[i]>>24);
                 break;
             case 'h':
-                for(int i=0; i<num_frame_words; i++)
+                for(unsigned i=0; i<num_frame_words; i++)
                     strm << std::hex << std::setfill('0') << "0x" << std::setw(8) << frame._binaryData[i] << std::endl;
                 break;
             case 'o':
-                for(int i=0; i<num_frame_words; i++)
+                for(unsigned i=0; i<num_frame_words; i++)
                     strm << std::oct << std::setfill('0') << "0" << std::setw(11) << frame._binaryData[i] << std::endl;
                 break;
             case 'd':
-                for(int i=0; i<num_frame_words; i++)
+                for(unsigned i=0; i<num_frame_words; i++)
                     strm << std::setfill('0') << std::setw(10) << frame._binaryData[i] << std::endl;
                 break;
             case 'f':
@@ -404,7 +407,7 @@ namespace framegen {
                 }
                 // Enter data.
                 strm << std::endl << std::hex << std::setfill('0') << "    0x" << std::setw(8) << frame._binaryData[0];
-                for(int i=1; i<num_frame_words; i++) {
+                for(unsigned i=1; i<num_frame_words; i++) {
                     strm << "," << std::endl << std::hex << std::setfill('0') << "    0x" << std::setw(8) << frame._binaryData[i];
                 }
                 strm << std::endl << "};\n\n#endif";
