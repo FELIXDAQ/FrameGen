@@ -39,11 +39,11 @@ cet_set_compiler_flags(DIAGS CAUTIOUS
 
 cet_report_compiler_flags()
 
+
 # these are minimum required versions, not the actual product versions
 find_ups_product( art v1_08_00 )
 find_ups_product( cetbuildtools v4_14_01 )
 find_ups_product( boost v1_00_00 )
-
 
 
 # macros for dictionary and simple_plugin
